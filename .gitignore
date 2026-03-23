@@ -1,0 +1,129 @@
+﻿# ══════════════════════════════════════
+# .NET / Visual Studio
+# ══════════════════════════════════════
+
+## Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+## NuGet
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+*.nupkg
+**/packages/repositories.config
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+## Visual Studio
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+## User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+## MSTest
+[Tt]est[Rr]esult*/
+[Dd]ebugPS/
+*.trx
+*.coverage
+*.coveragexml
+
+## Build logs
+*.log
+msbuild.wrn
+msbuild.err
+
+## Visual Studio cache/options
+*.VisualState.xml
+TestResult.xml
+[Tt]est[Rr]esults/
+
+## Caches
+project.nuget.cache
+*.nuget.props
+*.nuget.targets
+
+## Publish
+*.azurePubxml
+*.pubxml
+!**/[Pp]ublish[Pp]rofiles/*.pubxml
+*.publishproj
+
+## Generated files
+Generated_Code/
+
+## Backup & misc
+*.bak
+*.cache
+*.ilk
+*.meta
+*_i.c
+*_p.c
+*_h.h
+*.tmp
+~$*
+
+# ══════════════════════════════════════
+# WinUI 3 / Windows App SDK
+# ══════════════════════════════════════
+AppPackages/
+BundleArtifacts/
+*.appx
+*.appxbundle
+*.msix
+*.msixbundle
+*.msixupload
+*.appxupload
+
+# ══════════════════════════════════════
+# Node.js (Flasher.UI — React frontend)
+# ══════════════════════════════════════
+src/Flasher.UI/node_modules/
+src/Flasher.UI/dist/
+src/Flasher.UI/.vite/
+
+## npm
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ══════════════════════════════════════
+# LiteDB
+# ══════════════════════════════════════
+*.db
+*.db-journal
+
+# ══════════════════════════════════════
+# JetBrains Rider
+# ══════════════════════════════════════
+.idea/
+*.sln.iml
+
+# ══════════════════════════════════════
+# macOS
+# ══════════════════════════════════════
+.DS_Store
+
+# ══════════════════════════════════════
+# Windows
+# ══════════════════════════════════════
+Thumbs.db
+ehthumbs.db
+Desktop.ini
