@@ -5,9 +5,9 @@ namespace APConfigManager.Core.Interfaces.Transport
     /// </summary>
     public interface ISerialPortAdapter : IDisposable
     {
-        bool IsOpen { get; set; }
+        bool IsOpen { get; }
 
-        Stream BaseStream { get; set; }
+        Stream BaseStream { get; }
 
         /// <summary>
         /// Open a port at the specified rate

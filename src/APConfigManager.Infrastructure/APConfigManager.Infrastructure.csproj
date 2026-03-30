@@ -21,7 +21,6 @@
     <Folder Include="Drivers\Ardupilot\" />
     <Folder Include="Parsers\" />
     <Folder Include="Services\" />
-    <Folder Include="Transport\" />
   </ItemGroup>
 
 </Project>
