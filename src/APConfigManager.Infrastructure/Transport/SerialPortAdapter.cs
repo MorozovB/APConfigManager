@@ -2,7 +2,7 @@ using System.IO.Ports;
 using APConfigManager.Core.Exceptions;
 using APConfigManager.Core.Interfaces.Transport;
 
-namespace Flasher.Infrastructure.Transport;
+namespace APConfigManager.Infrastructure.Transport;
 
 /// <summary>
 /// Wrapper over System.IO.Ports.SerialPort with retry logic.
