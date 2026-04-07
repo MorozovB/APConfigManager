@@ -19,7 +19,6 @@
   <ItemGroup>
     <Folder Include="Data\" />
     <Folder Include="Drivers\Ardupilot\" />
-    <Folder Include="Parsers\" />
     <Folder Include="Services\" />
   </ItemGroup>
 
