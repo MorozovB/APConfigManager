@@ -35,7 +35,7 @@ namespace APConfigManager.Infrastructure.Parsers
                 var json = File.ReadAllText(filePath);
                 return ParseJson(json);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not ApjParseException)
             {
                 throw new ApjParseException($"File read error: {ex.Message}", ex);
             }
@@ -57,7 +57,7 @@ namespace APConfigManager.Infrastructure.Parsers
                 var json = reader.ReadToEnd();
                 return ParseJson(json);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not ApjParseException)
             {
                 throw new ApjParseException($"Stream read error: {ex.Message}", ex);
             }
