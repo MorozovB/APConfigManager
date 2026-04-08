@@ -1,6 +1,7 @@
 using System;
 using System.IO.Compression;
 using System.Security.Principal;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using APConfigManager.Core.Exceptions;
 using APConfigManager.Core.Interfaces.Parsers;
@@ -12,7 +13,7 @@ namespace APConfigManager.Infrastructure.Parsers
     /// <summary>
     /// Parses APJ firmware files.
     /// </summary>
-    public static class ApjFirmwareParser : IFirmwareParser
+    public class ApjFirmwareParser : IFirmwareParser
     {
         private const string ExpectedMagic = "APJFWv1";
 
@@ -55,16 +56,44 @@ namespace APConfigManager.Infrastructure.Parsers
             }
 
             // Required fields
-            int boardId = root["board_id"]?.GetValue<string>()
+            uint boardId = root["board_id"]?.GetValue<uint>()
                 ?? throw new ApjParseException("The field 'board_id' is missing");
+
+            int imageSize = root["image_size"]?.GetValue<int>()
+                ?? throw new ApjParseException("The field 'image_size' is missing");
+
+            string imageByte64 = root["image"]?.GetValue<string>()
+                ?? throw new ApjParseException("The field 'image' is missing");
+
+            // Optional fields
+            int boardRevision = root["board_revision"]?.GetValue<int>() ?? 0;
+            string description = root["description"]?.GetValue<string>() ?? string.Empty;
+            string version = root["version"]?.GetValue<string>() ?? string.Empty;
+
+            // Image decoding.
+            byte[] imageBytes = DecodeBase64(imageByte64, "image");
+
+            string gitIdentity = root["git_identity"]?.GetValue<string>() ?? string.Empty;
+
+            // External flash (optional).
+            byte[]? extfBytes = null;
+            var extfNode = root["extf_image"];
+            if (extfNode is not null && extfNode.GetValueKind() == JsonValueKind.String)
+            {
+                string extfBase64 = extfNode.GetValue<string>();
+                if (!string.IsNullOrEmpty(extfBase64))
+                    extfBytes = DecodeBase64(extfBase64, "extf_image");
+            }
 
             return new FirmwarePackage
             {
                 Magic = magic,
                 BoardId = boardId,
-                Description = description,
-                Version = version,
+                FlashSize = imageSize,
                 ImageBytes = imageBytes,
+                BoardRevision = boardRevision,
+                Version = version,
+                Description = description,
                 ExtfImageBytes = extfBytes,
                 GitIdentity = gitIdentity
             };

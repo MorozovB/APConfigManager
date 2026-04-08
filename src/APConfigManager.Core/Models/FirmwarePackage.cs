@@ -7,9 +7,9 @@ namespace APConfigManager.Core.Models
     public class FirmwarePackage
     {
         /// <summary>
-        /// Magic number identifying the firmware file format.
+        /// Magic string identifying the firmware file format.
         /// </summary>
-        public uint Magic { get; init; }
+        public string Magic { get; init; } = string.Empty;
 
         /// <summary>
         /// Target board identifier for which the firmware is intended.
@@ -27,9 +27,19 @@ namespace APConfigManager.Core.Models
         public string GitIdentity { get; init; } = string.Empty;
 
         /// <summary>
+        /// Gets the hardware revision number of the board.
+        /// </summary>
+        public int BoardRevision { get; init; }
+
+        /// <summary>
         /// Human-readable firmware description.
         /// </summary>
         public string Description { get; init; } = string.Empty;
+
+        /// <summary>
+        /// Size of flash.
+        /// </summary>
+        public int FlashSize { get; init; }
 
         /// <summary>
         /// Main firmware image
