@@ -1,12 +1,10 @@
 using System;
 using System.IO.Compression;
-using System.Security.Principal;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using APConfigManager.Core.Exceptions;
 using APConfigManager.Core.Interfaces.Parsers;
 using APConfigManager.Core.Models;
-using static MAVLink;
 
 namespace APConfigManager.Infrastructure.Parsers
 {
@@ -17,7 +15,14 @@ namespace APConfigManager.Infrastructure.Parsers
     {
         private const string ExpectedMagic = "APJFWv1";
 
+        // Delegation to static methods.
+        FirmwarePackage IFirmwareParser.Parse(string filePath) => Parse(filePath);
+        FirmwarePackage IFirmwareParser.Parse(Stream stream) => Parse(stream);
 
+
+        /// <summary>
+        /// Read JSON from Apj file.
+        /// </summary>
         public static FirmwarePackage Parse(string filePath)
         {
             if (!File.Exists(filePath))
@@ -25,18 +30,46 @@ namespace APConfigManager.Infrastructure.Parsers
                 throw new ApjParseException($"File {filePath} doesn't exists");
             }
 
-            string json;
-
             try
             {
-                json = File.ReadAllText(filePath);
+                var json = File.ReadAllText(filePath);
+                return ParseJson(json);
             }
             catch (Exception ex)
             {
                 throw new ApjParseException($"File read error: {ex.Message}", ex);
             }
+        }
 
+        /// <summary>
+        /// Parsing JSON from Apj file.
+        /// </summary>
+        public static FirmwarePackage Parse(Stream stream)
+        {
+            if (stream is null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
+            try
+            {
+                using var reader = new StreamReader(stream, leaveOpen: true);
+                var json = reader.ReadToEnd();
+                return ParseJson(json);
+            }
+            catch (Exception ex)
+            {
+                throw new ApjParseException($"Stream read error: {ex.Message}", ex);
+            }
+        }
+
+        /// <summary>
+        /// Parsing JSON files. Returns FirmwarePackage.
+        /// </summary>
+        private static FirmwarePackage ParseJson(string json)
+        {
             JsonNode root;
+
             try
             {
                 root = JsonNode.Parse(json) ?? throw new ApjParseException("File is empty or not JSON");
