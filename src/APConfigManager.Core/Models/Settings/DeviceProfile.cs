@@ -21,6 +21,11 @@ namespace APConfigManager.Core.Models.Settings
         public string Description { get; set; } = string.Empty;
 
         /// <summary>
+        /// Gets or sets the board type identifier for the device profile.
+        /// </summary>
+        public uint BoardType { get; set; }
+
+        /// <summary>
         /// Path to the default parameter file.
         /// </summary>
         public string? ParameterFilePath { get; set; } = string.Empty;

@@ -2,7 +2,7 @@ using APConfigManager.Core.Models.Settings;
 
 namespace APConfigManager.Core.Data
 {
-    internal interface ISettingsRepository
+    public interface ISettingsRepository
     {
         /// <summary>
         /// Get current settings (or default settings if not).
