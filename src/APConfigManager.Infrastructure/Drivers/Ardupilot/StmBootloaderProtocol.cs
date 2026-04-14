@@ -1,5 +1,7 @@
+using APConfigManager.Core.Exceptions;
 using APConfigManager.Core.Interfaces.Drivers;
 using APConfigManager.Core.Interfaces.Transport;
+using APConfigManager.Core.Models;
 
 namespace APConfigManager.Infrastructure.Drivers.Ardupilot
 {
@@ -17,7 +19,6 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
             this.port = port;
 
         }
-
 
         /// <summary>
         /// Synchronizes with the bootloader by sending GET_SYNC + EOL.
@@ -75,6 +76,108 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Reads board ID, revision, flash size, and bootloader revision from the device.
+        /// </summary>
+        public async Task<DeviceInfo> GetDeviceInfoAsync(CancellationToken ct)
+        {
+            var boardId = await ReadRegisterAsync(ArduPilotConstants.GET_DEVICE, ct);
+            var boardRevision = await ReadRegisterAsync(ArduPilotConstants.GET_DEVICE, ct);
+            var flashSize = await ReadRegisterAsync(ArduPilotConstants.GET_DEVICE, ct);
+            var bootloaderRevision = await ReadRegisterAsync(ArduPilotConstants.GET_DEVICE, ct);
+
+            return new DeviceInfo
+            {
+                BoardId = boardId,
+                BoardRevision = boardRevision,
+                FlashSize = flashSize,
+                BootloaderRevision = bootloaderRevision
+            };
+
+        }
+
+
+        /// <summary>
+        /// Performs full chip erase. May take up to 30 seconds.
+        /// </summary>
+        public async Task ChipEraseAsync(CancellationToken ct)
+        {
+            var command = new byte[] { ArduPilotConstants.CHIP_ERASE, ArduPilotConstants.EOC };
+
+            await port.WriteAsync(command, 0, command.Length, ct);
+
+            var response = new byte[2];
+            var bytesRead = 0;
+
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(ArduPilotConstants.EraseTimeoutMs);
+
+            try
+            {
+                while (bytesRead < 2)
+                {
+                    var read = await port.ReadAsync(response, bytesRead, 2 - bytesRead, cts.Token);
+                    if (read == 0)
+                    {
+                        throw new BootloaderException("Connection lost during chip erase.");
+                    }
+                    bytesRead += read;
+                }
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                throw new BootloaderException($"Chip erase timed out after {ArduPilotConstants.EraseTimeoutMs}");
+            }
+
+            CheckResponse(response);
+        }
+
+
+
+        /// <summary>
+        /// Sends a GET_DEVICE command and reads a 4-byte unsigned integer response.
+        /// </summary>
+        private async Task<uint> ReadRegisterAsync(byte command, CancellationToken ct)
+        {
+            var request = new byte[] { command, ArduPilotConstants.EOC };
+            await port.WriteAsync(request, 0, request.Length, ct);
+
+            // Read 4 data bytes + 2 status bytes (INSYNC + OK)
+            var response = new byte[6];
+            var bytesRead = 0;
+
+            while (bytesRead < 6)
+            {
+                var read = await port.ReadAsync(response, bytesRead, 6 - bytesRead, ct);
+                if (read == 0)
+                    throw new BootloaderException("Connection lost while reading device info.");
+
+                bytesRead += read;
+            }
+
+            CheckResponse(response);
+
+            return BitConverter.ToUInt32(response, 0);
+        }
+
+        /// <summary>
+        /// Validates the bootloader response bytes.
+        /// </summary>
+        private void CheckResponse(byte[] response)
+        {
+            var insync = response[^2];
+            var status = response[^1];
+
+            if (insync != ArduPilotConstants.INSYNC)
+                throw new BootloaderException($"Bootloader out of sync: expected 0x{ArduPilotConstants.INSYNC:X2}, got 0x{insync:X2}.");
+
+            if (status == ArduPilotConstants.INVALID)
+                throw new BootloaderException("Bootloader rejected the command.");
+
+            if (status != ArduPilotConstants.OK)
+                throw new BootloaderException($"Unexpected bootloader status: 0x{status:X2}.");
         }
     }
 }
