@@ -53,7 +53,7 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
                         var read = await port.ReadAsync(response, bytesRead, 2 - bytesRead, ct);
                         if (read == 0)
                         {
-                            break; // No more data
+                            break;
                         }
                         bytesRead += read;
                     }
@@ -135,6 +135,54 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
         }
 
 
+        /// <summary>
+        /// Sends a raw command to the bootloader.
+        /// </summary>
+        private async Task SendCommandAsync(byte[] command, CancellationToken ct)
+        {
+            ArgumentNullException.ThrowIfNull(command);
+
+            await port.WriteAsync(command, 0, command.Length, ct);
+
+            var response = new byte[2];
+            var bytesRead = 0;
+
+            while (bytesRead < response.Length)
+            {
+                var read = await port.ReadAsync(response, bytesRead, response.Length - bytesRead, ct);
+                if (read == 0)
+                    throw new BootloaderException("Connection lost while waiting for bootloader response.");
+                bytesRead += read;
+            }
+
+            CheckResponse(response);
+        }
+
+
+        /// <summary>
+        /// Calculates CRC-32/POSIX checksum.
+        /// </summary>
+        private static uint CalculateCrc32(byte[] data)
+        {
+            ArgumentNullException.ThrowIfNull(data);
+            const uint polynomial = 0xEDB88320;
+            uint crc = 0xFFFFFFFF;
+
+            foreach (var value in data)
+            {
+                crc ^= value;
+                for (int i = 0; i < 8; i++)
+                {
+                    var lsb = crc & 1;
+                    crc >>= 1;
+                    if (lsb != 0)
+                    {
+                        crc ^= polynomial;
+                    }
+                }
+            }
+            return ~crc;
+        }
 
         /// <summary>
         /// Sends a GET_DEVICE command and reads a 4-byte unsigned integer response.
