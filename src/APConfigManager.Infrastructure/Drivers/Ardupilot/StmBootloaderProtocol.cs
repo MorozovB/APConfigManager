@@ -134,6 +134,34 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
             CheckResponse(response);
         }
 
+        /// <summary>
+        /// Writes a single data chunk (up to 64 bytes) to flash memory.
+        /// </summary>
+        public async Task ProgramMultiAsync(byte[] data, CancellationToken ct)
+        {
+            if (data.Length > ArduPilotConstants.ProgMultiMaxSize)
+            {
+                throw new ArgumentException($"Chunk size {data.Length} exceeds maximum of {ArduPilotConstants.ProgMultiMaxSize} bytes.\"");
+            }
+
+            // Packet format: [PROG_MULTI, length, data..., EOC]
+            var packet = new byte[data.Length + 3];
+            packet[0] = ArduPilotConstants.PROG_MULTI;
+            packet[1] = (byte)data.Length;
+            Array.Copy(data, 0, packet, 2, data.Length);
+            packet[^1] = ArduPilotConstants.EOC;
+
+            await SendCommandAsync(packet, ct);
+        }
+
+        /// <summary>
+        /// Verifies CRC-32 of the programmed flash area.
+        /// </summary>
+        public async Task<bool> VerifyCrcAsync(uint expectedCrc, CancellationToken ct)
+        {
+            var deviceCrc = await ReadRegisterAsync(ArduPilotConstants.GET_CRC, ct);
+            return deviceCrc == expectedCrc;
+        }
 
         /// <summary>
         /// Sends a raw command to the bootloader.
@@ -157,7 +185,6 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
 
             CheckResponse(response);
         }
-
 
         /// <summary>
         /// Calculates CRC-32/POSIX checksum.
@@ -219,13 +246,19 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
             var status = response[^1];
 
             if (insync != ArduPilotConstants.INSYNC)
+            {
                 throw new BootloaderException($"Bootloader out of sync: expected 0x{ArduPilotConstants.INSYNC:X2}, got 0x{insync:X2}.");
+            }
 
             if (status == ArduPilotConstants.INVALID)
+            {
                 throw new BootloaderException("Bootloader rejected the command.");
+            }
 
             if (status != ArduPilotConstants.OK)
+            {
                 throw new BootloaderException($"Unexpected bootloader status: 0x{status:X2}.");
+            }
         }
     }
 }
