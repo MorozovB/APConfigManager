@@ -98,7 +98,6 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
 
         }
 
-
         /// <summary>
         /// Performs full chip erase. May take up to 30 seconds.
         /// </summary>
@@ -161,6 +160,36 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
         {
             var deviceCrc = await ReadRegisterAsync(ArduPilotConstants.GET_CRC, ct);
             return deviceCrc == expectedCrc;
+        }
+
+        /// <summary>
+        /// Changes the bootloader communication baud rate.
+        /// </summary>
+        public async Task SetBaudRateAsync(int baudrate, CancellationToken ct)
+        {
+            if (baudrate <= 0)
+            {
+                throw new ArgumentException("Baud rate must be a positive integer.");
+            }
+
+            var baudBytes = BitConverter.GetBytes(baudrate);
+            var command = new byte[6];
+            command[0] = ArduPilotConstants.SET_BAUD;
+            Array.Copy(baudBytes, 0, command, 1, baudBytes.Length);
+            command[^1] = ArduPilotConstants.EOC;
+
+            await SendCommandAsync(command, ct);
+
+            port.ChangeBaudRate(baudrate);
+        }
+
+        /// <summary>
+        /// Commands the bootloader to launch the flashed firmware.
+        /// </summary>
+        public async Task BootAsync(CancellationToken ct)
+        {
+            var command = new byte[] { ArduPilotConstants.BOOT, ArduPilotConstants.EOC };
+            await SendCommandAsync(command, ct);
         }
 
         /// <summary>

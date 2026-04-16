@@ -36,7 +36,7 @@ namespace APConfigManager.Core.Interfaces.Drivers
         /// <summary>
         /// Changing the port speed on the bootloader side.
         /// </summary>
-        Task SetBaudRateAsync(int Baudrate, CancellationToken ct);
+        Task SetBaudRateAsync(int baudrate, CancellationToken ct);
 
         /// <summary>
         /// Command to the bootloader to run the firmware (exit bootloader).
