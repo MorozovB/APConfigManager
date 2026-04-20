@@ -15,7 +15,7 @@ namespace APConfigManager.Core.Interfaces.Drivers
         /// <summary>
         /// MAVLink CMD 246 - reboot in bootloader.
         /// </summary>
-        Task RebootingToBootloaderAsync(CancellationToken ct);
+        Task RebootToBootloaderAsync(CancellationToken ct);
 
         /// <summary>
         /// Request all parameters from the device.
@@ -25,12 +25,12 @@ namespace APConfigManager.Core.Interfaces.Drivers
         /// <summary>
         /// Setting a single parameter (PARAM_SET).
         /// </summary>
-        Task<bool> SetParamsAsync(Parameter parameter, CancellationToken ct);
+        Task<bool> SetParamAsync(Parameter parameter, CancellationToken ct);
 
         /// <summary>
         /// Getting the git-hash of the current firmware.
         /// </summary>
-        Task<string> GetFirwareVersionAsync(CancellationToken ct);
+        Task<string> GetFirmwareVersionAsync(CancellationToken ct);
 
         /// <summary>
         /// MAVLink CMD 245-reset parameters to defaults.
