@@ -1,3 +1,4 @@
+using APConfigManager.Core.Interfaces.Drivers;
 using APConfigManager.Core.Models;
 
 namespace APConfigManager.Core.Interfaces.Services
@@ -20,11 +21,16 @@ namespace APConfigManager.Core.Interfaces.Services
         /// <summary>
         /// List of all active sessions
         /// </summary>
-        List<DeviceSession> GetAllSession();
+        List<DeviceSession> GetAllSessions();
 
         /// <summary>
         /// Closure of the session and release of the port.
         /// </summary>
         Task CloseSessionAsync(Guid sessionId);
+
+        /// <summary>
+        /// Get the driver associated with the session.
+        /// </summary>
+        IAutopilotDriver GetDriver(Guid sessionId);
     }
 }
