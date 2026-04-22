@@ -1,0 +1,7 @@
+{
+  "profiles": {
+    "APConfigManager.Desktop": {
+      "commandName": "MsixPackage"
+    }
+  }
+}

@@ -39,7 +39,7 @@ namespace APConfigManager.Core.Interfaces.Drivers
         /// Write parameters to the device.
         /// </summary>
         Task<ParameterUploadResult> WriteParamsAsync(List<Parameter> parameters,
-            IProgress<(int percent, string message)> progress, CancellationToken ct);
+            IProgress<(int current, int total)> progress, CancellationToken ct);
 
         /// <summary>
         /// Rebooting to the specified mode.
@@ -49,6 +49,6 @@ namespace APConfigManager.Core.Interfaces.Drivers
         /// <summary>
         /// Disconnecting from the device
         /// </summary>
-        Task Disconnect();
+        Task DisconnectAsync();
     }
 }
