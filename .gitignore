@@ -25,7 +25,8 @@ project.fragment.lock.json
 artifacts/
 "src/APConfigManager.Desktop/APConfigManager.Desktop (Package)"
 ./src/APConfigManager.Desktop/APConfigManager.Desktop (Package)
-
+./tests/APConfigManager.Infrastructure.Tests/TestData
+"./tests/APConfigManager.Infrastructure.Tests/TestData"
 
 
 ## Visual Studio
@@ -131,3 +132,4 @@ yarn-error.log*
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+/tests/APConfigManager.Infrastructure.Tests/TestData
