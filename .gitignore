@@ -23,6 +23,10 @@ bld/
 project.lock.json
 project.fragment.lock.json
 artifacts/
+"src/APConfigManager.Desktop/APConfigManager.Desktop (Package)"
+./src/APConfigManager.Desktop/APConfigManager.Desktop (Package)
+
+
 
 ## Visual Studio
 .vs/
