@@ -5,7 +5,7 @@ namespace APConfigManager.Core.Interfaces.Parsers
     /// <summary>
     /// Parsing the parameter file (.param) into a list of Parameter objects.
     /// </summary>
-    public interface IParamFileParse
+    public interface IParamFileParser
     {
         /// <summary>
         /// Parsing the .param file.

@@ -47,6 +47,16 @@ namespace APConfigManager.Core.Interfaces.Drivers
         Task<BootResult> RebootAsync(BootMode mode, CancellationToken ct);
 
         /// <summary>
+        /// Retrieves the firmware git hash from the connected device.
+        /// </summary>
+        Task<string> GetFirmwareVersionAsync(CancellationToken ct);
+
+        /// <summary>
+        /// Resets all parameters to factory defaults.
+        /// </summary>
+        Task ResetParamsAsync(CancellationToken ct);
+
+        /// <summary>
         /// Disconnecting from the device
         /// </summary>
         Task DisconnectAsync();

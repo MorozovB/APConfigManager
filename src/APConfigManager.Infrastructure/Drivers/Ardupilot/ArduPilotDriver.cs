@@ -379,6 +379,26 @@ public class ArduPilotDriver : IAutopilotDriver
     }
 
     /// <summary>
+    /// Retrieves the firmware git hash from the autopilot via MAVLink.
+    /// </summary>
+    public async Task<string> GetFirmwareVersionAsync(CancellationToken ct)
+    {
+        EnsureConnected();
+        await EnsureModeAsync(BootMode.Normal, ct);
+        return await _telemetry.GetFirmwareVersionAsync(ct);
+    }
+
+    /// <summary>
+    /// Resets all parameters to factory defaults via MAVLink command.
+    /// </summary>
+    public async Task ResetParamsAsync(CancellationToken ct)
+    {
+        EnsureConnected();
+        await EnsureModeAsync(BootMode.Normal, ct);
+        await _telemetry.ResetParamsAsync(ct);
+    }
+
+    /// <summary>
     /// Closes the serial port and releases resources.
     /// Resets the session and mode to initial state.
     /// </summary>

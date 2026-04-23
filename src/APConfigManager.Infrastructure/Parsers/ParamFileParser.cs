@@ -7,11 +7,11 @@ namespace APConfigManager.Infrastructure.Parsers
     /// <summary>
     /// Parses .param files (CSV-like format with parameter name and float value).
     /// </summary>
-    public class ParamFileParser : IParamFileParse
+    public class ParamFileParser : IParamFileParser
     {
         // Delegation to static methods.
-        List<Parameter> IParamFileParse.Parse(string filePath) => Parse(filePath);
-        List<Parameter> IParamFileParse.Parse(Stream stream) => Parse(stream);
+        List<Parameter> IParamFileParser.Parse(string filePath) => Parse(filePath);
+        List<Parameter> IParamFileParser.Parse(Stream stream) => Parse(stream);
 
 
         /// <summary>

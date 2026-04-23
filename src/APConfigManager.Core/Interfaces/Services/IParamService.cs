@@ -6,18 +6,18 @@ namespace APConfigManager.Core.Interfaces.Services
     /// <summary>
     /// Parameter service.
     /// </summary>
-    internal interface IParamService
+    public interface IParamService
     {
         /// <summary>
         /// Upload settings from a file to a device.
         /// </summary>
         Task<ParameterUploadResult> UploadAsync(Guid sessionId, Stream stream,
-           IProgress<(int percent, string message)> progress, CancellationToken ct);
+           IProgress<(int percent, int total)> progress, CancellationToken ct);
 
         /// <summary>
         /// Read parameters from a device.
         /// </summary>
-        Task<List<Parameter>> DawnloadAsync(Guid sessionId, CancellationToken ct);
+        Task<List<Parameter>> DownloadAsync(Guid sessionId, CancellationToken ct);
 
         /// <summary>
         /// Resetting Settings to Defaults
