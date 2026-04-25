@@ -23,7 +23,7 @@ public class ArduPilotDriver : IAutopilotDriver
     private readonly ITelemetryProtocol _telemetry;
     private readonly IPortScanner _portScanner;
 
-    private DeviceSession? _session;
+    private DeviceSession? session;
     private BootMode _currentMode = BootMode.Normal;
 
     /// <summary>
@@ -62,7 +62,7 @@ public class ArduPilotDriver : IAutopilotDriver
         }
 
         _currentMode = BootMode.Normal;
-        _session = new DeviceSession
+        session = new DeviceSession
         {
             Id = Guid.NewGuid(),
             Port = port,
@@ -71,7 +71,7 @@ public class ArduPilotDriver : IAutopilotDriver
             ConnectedAt = DateTime.UtcNow
         };
 
-        return _session;
+        return session;
     }
 
     /// <summary>
@@ -304,7 +304,7 @@ public class ArduPilotDriver : IAutopilotDriver
                 _port.Close();
 
                 var newPort = await _portScanner.WaitForBootloaderPortAsync(
-                    _session!.Port,
+                    session!.Port,
                     TimeSpan.FromSeconds(PortSwitchTimeoutSeconds),
                     ct);
 
@@ -343,10 +343,10 @@ public class ArduPilotDriver : IAutopilotDriver
                 ct);
 
             var targetPort = string.IsNullOrWhiteSpace(newNormalPort)
-                ? _session!.Port
+                ? session!.Port
                 : newNormalPort;
 
-            _port.Open(targetPort, _session!.BaudRate);
+            _port.Open(targetPort, session!.BaudRate);
 
             try
             {
@@ -409,7 +409,7 @@ public class ArduPilotDriver : IAutopilotDriver
             _port.Close();
         }
 
-        _session = null;
+        session = null;
         _currentMode = BootMode.Normal;
         return Task.CompletedTask;
     }
@@ -419,7 +419,7 @@ public class ArduPilotDriver : IAutopilotDriver
     /// </summary>
     private void EnsureConnected()
     {
-        if (_session is null || !_port.IsOpen)
+        if (session is null || !_port.IsOpen)
         {
             throw new SessionException("No active session. Call ConnectAsync first.");
         }
@@ -448,18 +448,18 @@ public class ArduPilotDriver : IAutopilotDriver
     /// </summary>
     private void UpdateSessionState(DeviceState state)
     {
-        if (_session is null)
+        if (session is null)
         {
             return;
         }
 
-        _session = new DeviceSession
+        session = new DeviceSession
         {
-            Id = _session.Id,
-            Port = _session.Port,
-            BaudRate = _session.BaudRate,
+            Id = session.Id,
+            Port = session.Port,
+            BaudRate = session.BaudRate,
             State = state,
-            ConnectedAt = _session.ConnectedAt
+            ConnectedAt = session.ConnectedAt
         };
     }
 
@@ -468,18 +468,18 @@ public class ArduPilotDriver : IAutopilotDriver
     /// </summary>
     private void UpdateSessionPortAndState(string port, DeviceState state)
     {
-        if (_session is null)
+        if (session is null)
         {
             return;
         }
 
-        _session = new DeviceSession
+        session = new DeviceSession
         {
-            Id = _session.Id,
+            Id = session.Id,
             Port = port,
-            BaudRate = _session.BaudRate,
+            BaudRate = session.BaudRate,
             State = state,
-            ConnectedAt = _session.ConnectedAt
+            ConnectedAt = session.ConnectedAt
         };
     }
 

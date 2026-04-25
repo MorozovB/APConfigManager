@@ -10,22 +10,22 @@ namespace APConfigManager.Core.Models
         /// <summary>
         /// Unique session identifier.
         /// </summary>
-        public Guid Id { get; init; }
+        public Guid Id { get; set; }
 
         /// <summary>
         /// COM-port name.
         /// </summary>
-        public string Port { get; init; } = string.Empty;
+        public string Port { get; set; } = string.Empty;
 
         /// <summary>
         /// Connection speed.
         /// </summary>
-        public int BaudRate { get; init; }
+        public int BaudRate { get; set; }
 
         /// <summary>
         /// Current device status.
         /// </summary>
-        public DeviceState State { get; init; }
+        public DeviceState State { get; set; }
 
         /// <summary>
         /// Session creation time

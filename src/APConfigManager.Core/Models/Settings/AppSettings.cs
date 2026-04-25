@@ -5,6 +5,7 @@ namespace APConfigManager.Core.Models.Settings
     /// </summary>
     public class AppSettings
     {
+        public Guid Id { get; set; } = Guid.NewGuid();
         public string Language { get; set; } = "UA";
     }
 }

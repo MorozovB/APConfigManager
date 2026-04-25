@@ -22,10 +22,10 @@ public class SessionManager : ISessionManager, IAsyncDisposable
     /// <summary>
     /// Initializes the session manager with a driver factory.
     /// The factory will be replaced with proper DI registration in Flasher.Api.
-    /// </summary>
+    /// </summary>  
     public SessionManager(Func<IAutopilotDriver> driverFactory)
     {
-        driverFactory = driverFactory;
+        this.driverFactory = driverFactory;
     }
 
     /// <summary>
@@ -57,7 +57,7 @@ public class SessionManager : ISessionManager, IAsyncDisposable
                     $"Port {port} is already in use by another session.");
             }
 
-            var driver = driverFactory();
+            var driver = this.driverFactory();
             var session = await driver.ConnectAsync(port, baudRate, ct);
 
             sessions[session.Id] = session;

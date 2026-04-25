@@ -29,7 +29,7 @@ namespace APConfigManager.Infrastructure.Data
 
             settings = new AppSettings
             {
-                Language = "ua"
+                Language = "UA"
             };
 
             context.Settings.Insert(settings);

@@ -39,12 +39,9 @@ namespace APConfigManager.Infrastructure.Data
             if (profile.Id == Guid.Empty)
             {
                 profile.Id = Guid.NewGuid();
-                context.DeviceProfiles.Upsert(profile);
             }
-            else
-            {
-                context.DeviceProfiles.Update(profile);
-            }
+
+            context.DeviceProfiles.Upsert(profile);
         }
 
         /// <summary>
@@ -52,7 +49,7 @@ namespace APConfigManager.Infrastructure.Data
         /// </summary>
         public void Delete(Guid profileId)
         {
-            context.DeviceProfiles.Delete(profileId);
+            context.DeviceProfiles.Delete(new LiteDB.BsonValue(profileId));
         }
     }
 }
