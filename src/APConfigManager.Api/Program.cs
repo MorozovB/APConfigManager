@@ -1,36 +1,92 @@
+using APConfigManager.Api.Hubs;
+using APConfigManager.Core.Data;
+using APConfigManager.Core.Interfaces.Drivers;
+using APConfigManager.Core.Interfaces.Parsers;
+using APConfigManager.Core.Interfaces.Services;
+using APConfigManager.Core.Interfaces.Transport;
+using APConfigManager.Infrastructure.Data;
+using APConfigManager.Infrastructure.Drivers.Ardupilot;
+using APConfigManager.Infrastructure.Drivers.ArduPilot;
+using APConfigManager.Infrastructure.Parsers;
+using APConfigManager.Infrastructure.Services;
+using APConfigManager.Infrastructure.Transport;
 
-namespace APConfigManager.Api
+var builder = WebApplication.CreateBuilder(args);
+
+// ─── Controllers & Swagger ──────────────────────
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+// ─── SignalR ────────────────────────────────────
+builder.Services.AddSignalR();
+
+// ─── CORS ───────────────────────────────────────
+builder.Services.AddCors(options =>
 {
-    public class Program
+    options.AddPolicy("AllowLocalhost", policy =>
     {
-        public static void Main(string[] args)
-        {
-            var builder = WebApplication.CreateBuilder(args);
+        policy.WithOrigins("http://localhost:5173", "http://localhost:3000")
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
+    });
+});
 
-            // Add services to the container.
+// ─── Persistence ────────────────────────────────
+var dbFolder = Path.Combine(
+    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+    "APConfigManager");
 
-            builder.Services.AddControllers();
-            // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-            builder.Services.AddEndpointsApiExplorer();
-            builder.Services.AddSwaggerGen();
+if (!Directory.Exists(dbFolder))
+    Directory.CreateDirectory(dbFolder);
 
-            var app = builder.Build();
+var dbPath = Path.Combine(dbFolder, "app.db");
 
-            // Configure the HTTP request pipeline.
-            if (app.Environment.IsDevelopment())
-            {
-                app.UseSwagger();
-                app.UseSwaggerUI();
-            }
+builder.Services.AddSingleton(new LiteDbContext(dbPath));
+builder.Services.AddSingleton<ISettingsRepository, SettingsRepository>();
+builder.Services.AddSingleton<IDeviceProfileRepository, DeviceProfileRepository>();
 
-            app.UseHttpsRedirection();
+// ─── Transport ──────────────────────────────────
+builder.Services.AddTransient<ISerialPortAdapter, SerialPortAdapter>();
+builder.Services.AddSingleton<IPortScanner, PortScanner>();
 
-            app.UseAuthorization();
+// ─── Parsers ────────────────────────────────────
+builder.Services.AddSingleton<IFirmwareParser, ApjFirmwareParser>();
+builder.Services.AddSingleton<IParamFileParser, ParamFileParser>();
 
+// ─── Protocols ──────────────────────────────────
+builder.Services.AddTransient<IBootloaderProtocol, StmBootloaderProtocol>();
+builder.Services.AddTransient<ITelemetryProtocol, MavLinkProtocol>();
 
-            app.MapControllers();
+// ─── Driver ─────────────────────────────────────
+builder.Services.AddTransient<IAutopilotDriver, ArduPilotDriver>();
 
-            app.Run();
-        }
-    }
+// ─── Services ───────────────────────────────────
+builder.Services.AddSingleton<IFirmwareValidator, FirmwareValidator>();
+
+builder.Services.AddSingleton<ISessionManager>(sp =>
+    new SessionManager(() => sp.GetRequiredService<IAutopilotDriver>()));
+
+builder.Services.AddScoped<IFlashService, FlashService>();
+builder.Services.AddScoped<IEraseService, EraseService>();
+builder.Services.AddScoped<IParamService, ParamService>();
+
+// ─── Build ──────────────────────────────────────
+var app = builder.Build();
+
+// ─── Middleware ──────────────────────────────────
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
+
+app.UseCors("AllowLocalhost");
+app.UseRouting();
+
+// ─── Endpoints ──────────────────────────────────
+app.MapControllers();
+app.MapHub<DeviceHub>("/hubs/device");
+
+await app.RunAsync();

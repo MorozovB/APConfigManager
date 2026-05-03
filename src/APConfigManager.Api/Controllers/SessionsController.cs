@@ -27,6 +27,7 @@ namespace APConfigManager.Api.Controllers
         /// <summary>
         /// POST /api/sessions — creates a new device session.
         /// </summary>
+        [HttpPost]
         public async Task<ActionResult<SessionResponse>> CreateSession([FromBody] CreateSessionRequest request,
             CancellationToken ct)
         {
