@@ -14,14 +14,14 @@ namespace APConfigManager.Api.Controllers
     [Route("api/sessions/{sessionId:guid}/boot")]
     public class BootController : ControllerBase
     {
-        private readonly ISessionManager sesionManager;
+        private readonly ISessionManager sessionManager;
 
         private readonly IHubContext<DeviceHub> hubContext;
 
 
         public BootController(ISessionManager sessionManager, IHubContext<DeviceHub> hubContext)
         {
-            this.sesionManager = sessionManager;
+            this.sessionManager = sessionManager;
             this.hubContext = hubContext;
         }
 
@@ -29,11 +29,12 @@ namespace APConfigManager.Api.Controllers
         /// POST /api/sessions/{id}/boot — boots the device from bootloader to normal mode.
         /// </summary>
         [HttpPost]
-        public async Task<ActionResult<OperationResultResponse>> Boot(Guid sessionId, CancellationToken ct)
+        public async Task<ActionResult<OperationResultResponse>> Boot(
+    Guid sessionId,
+    CancellationToken ct)
         {
-            var session = this.sesionManager.GetSession(sessionId);
-
-            if (session == null)
+            var session = sessionManager.GetSession(sessionId);
+            if (session is null)
             {
                 return NotFound(new OperationResultResponse
                 {
@@ -44,8 +45,7 @@ namespace APConfigManager.Api.Controllers
 
             try
             {
-                var driver = this.sesionManager.GetDriver(sessionId);
-
+                var driver = sessionManager.GetDriver(sessionId);
                 var result = await driver.RebootAsync(BootMode.Normal, ct);
 
                 if (result.Success)
@@ -56,11 +56,10 @@ namespace APConfigManager.Api.Controllers
 
                 return Ok(new OperationResultResponse
                 {
-                    Success = true,
-                    Message = "Device booted successfully",
+                    Success = result.Success,
+                    Message = result.Success ? "Device booted successfully" : result.ErrorMessage,
                     Data = result
                 });
-
             }
             catch (Exception ex)
             {

@@ -4,7 +4,6 @@ using APConfigManager.Core.Interfaces.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using APConfigManager.Core.Exceptions;
-using APConfigManager.Core.Models;
 
 namespace APConfigManager.Api.Controllers
 {
@@ -116,10 +115,10 @@ namespace APConfigManager.Api.Controllers
         {
             try
             {
-                var session = sessionManager.CloseSessionAsync(id);
+                await sessionManager.CloseSessionAsync(id);
 
-                await hubContext.Clients.Group(session.Id.ToString())
-                    .SendAsync("DeviceStateChanged", session.Id.ToString(), "disconnected");
+                await hubContext.Clients.Group(id.ToString())
+                    .SendAsync("DeviceStateChanged", id.ToString(), "Disconnected");
 
                 return NoContent();
             }
