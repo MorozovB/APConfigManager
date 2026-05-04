@@ -5,55 +5,64 @@ using APConfigManager.Core.Interfaces.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 
-namespace APConfigManager.Api.Controllers
+namespace APConfigManager.Api.Controllers;
+
+/// <summary>
+/// Handles firmware flashing operations.
+/// </summary>
+[ApiController]
+[Route("api/sessions/{sessionId:guid}/flash")]
+public class FlashController : ControllerBase
 {
-    /// <summary>
-    /// Handles firmware flashing operations.
-    /// </summary>
-    [ApiController]
-    [Route("api/sessions/{sessionId:guid}/flash")]
-    public class FlashController : ControllerBase
+    private readonly IFlashService flashService;
+    private readonly IHubContext<DeviceHub> hubContext;
+
+    public FlashController(IFlashService flashService, IHubContext<DeviceHub> hubContext)
     {
-        private readonly IEraseService eraseService;
+        this.flashService = flashService;
+        this.hubContext = hubContext;
+    }
 
-        private readonly IHubContext<DeviceHub> hubContext;
-
-        public FlashController(IEraseService eraseService, IHubContext<DeviceHub> hubContext)
+    /// <summary>
+    /// POST /api/sessions/{id}/flash — starts firmware flashing.
+    /// Accepts .apj file via multipart/form-data.
+    /// </summary>
+    [HttpPost]
+    public async Task<ActionResult<OperationResultResponse>> Flash(
+        Guid sessionId,
+        IFormFile file,
+        CancellationToken ct)
+    {
+        if (file is null || file.Length <= 0)
         {
-            this.eraseService = eraseService;
-            this.hubContext = hubContext;
+            return BadRequest("Firmware file is required.");
         }
 
-        // <summary>
-        // POST /api/sessions/{id}/erase — starts flash memory erase.
-        // </summary>
-        [HttpPost]
-        public async Task<ActionResult<OperationResultResponse>> Erase(Guid sessionId, CancellationToken ct)
+        try
         {
-            try
+            using var stream = file.OpenReadStream();
+
+            var progress = new Progress<(int percent, string message)>(p =>
             {
-                var progress = new Progress<(int percent, string message)>(p =>
-                {
-                    hubContext.Clients.Group(sessionId.ToString())
-                        .SendAsync("EraseProgress", p.percent, p.message);
-                });
+                hubContext.Clients.Group(sessionId.ToString())
+                    .SendAsync("FlashProgress", p.percent, p.message);
+            });
 
-                var result = await eraseService.EraseAsync(sessionId, progress, ct);
+            var result = await flashService.FlashAsync(sessionId, stream, progress, ct);
 
-                await hubContext.Clients.Group(sessionId.ToString())
-                    .SendAsync("OperationCompleted", sessionId.ToString(), result);
+            await hubContext.Clients.Group(sessionId.ToString())
+                .SendAsync("OperationCompleted", sessionId.ToString(), result, ct);
 
-                return Ok(new OperationResultResponse
-                {
-                    Success = result.Success,
-                    Message = result.ErrorMessage ?? "Erase completed",
-                    Data = result
-                });
-            }
-            catch (SessionException ex)
+            return Ok(new OperationResultResponse
             {
-                return NotFound(ex.Message);
-            }
+                Success = result.Success,
+                Message = result.ErrorMessage ?? "Flash completed",
+                Data = result
+            });
+        }
+        catch (SessionException ex)
+        {
+            return NotFound(ex.Message);
         }
     }
 }
