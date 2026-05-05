@@ -15,7 +15,7 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot;
 /// </summary>
 public class ArduPilotDriver : IAutopilotDriver
 {
-    private const int ChunkSize = 64;
+    private const int ChunkSize = 252;
     private const int HeartbeatTimeoutMs = 3000;
     private const int PortSwitchTimeoutSeconds = 20;
     private const int WriteParamsPasses = 3;
@@ -63,15 +63,31 @@ public class ArduPilotDriver : IAutopilotDriver
             this.port.Flush();
             var syncOk = await this.bootloader.SyncAsync(ct);
 
+            //if (syncOk)
+            //{
+            //    this.currentMode = BootMode.Bootloader;
+            //}
+            //else
+            //{
+            //    this.port.Close();
+            //    throw new DeviceConnectionException(
+            //        $"No response from device on port {port} (neither MAVLink nor bootloader).");
+            //}
+
             if (syncOk)
             {
-                this.currentMode = BootMode.Bootloader;
-            }
-            else
-            {
-                this.port.Close();
-                throw new DeviceConnectionException(
-                    $"No response from device on port {port} (neither MAVLink nor bootloader).");
+                await bootloader.GetDeviceInfoAsync(ct);
+
+                try
+                {
+                    await bootloader.SetBaudRateAsync(ArduPilotConstants.FlashBaudRate, ct);
+                }
+                catch
+                {
+                    // Stay at default baud rate
+                }
+
+                currentMode = BootMode.Bootloader;
             }
         }
 
@@ -149,7 +165,11 @@ public class ArduPilotDriver : IAutopilotDriver
                 bytesWritten += size;
 
                 var percent = (int)(80.0 * bytesWritten / totalBytes);
-                progress.Report((percent, $"Writing {bytesWritten}/{totalBytes}"));
+                var prevPercent = (int)(80.0 * (bytesWritten - size) / totalBytes);
+                if (percent > prevPercent)
+                {
+                    progress.Report((percent, $"Writing {bytesWritten}/{totalBytes}"));
+                }
             }
 
             progress.Report((90, "Verifying..."));
@@ -317,77 +337,46 @@ public class ArduPilotDriver : IAutopilotDriver
 
         try
         {
-            //if (mode == BootMode.Bootloader)
-            //{
-            //    await telemetry.RebootToBootloaderAsync(ct);
-            //    port.Close();
-
-            //    var newPort = await portScanner.WaitForBootloaderPortAsync(
-            //        session!.Port,
-            //        TimeSpan.FromSeconds(PortSwitchTimeoutSeconds),
-            //        ct);
-
-            //    if (string.IsNullOrWhiteSpace(newPort))
-            //    {
-            //        throw new DeviceConnectionException("Bootloader port not found.");
-            //    }
-
-            //    port.Open(newPort, ArduPilotConstants.BootloaderBaudRate);
-
-            //    var syncOk = await bootloader.SyncAsync(ct);
-            //    if (!syncOk)
-            //    {
-            //        port.Close();
-            //        throw new DeviceConnectionException("Bootloader sync failed.");
-            //    }
-
-            //    // Read device info to complete bootloader initialization
-            //    await bootloader.GetDeviceInfoAsync(ct);
-
-            //    currentMode = BootMode.Bootloader;
-            //    UpdateSessionPortAndState(newPort, DeviceState.InBootloader);
-
-            //    return new BootResult
-            //    {
-            //        Success = true,
-            //        NewPort = newPort
-            //    };
-            //}
             if (mode == BootMode.Bootloader)
             {
-                Console.WriteLine("1. Sending reboot command...");
                 await telemetry.RebootToBootloaderAsync(ct);
-
-                Console.WriteLine("2. Closing port...");
                 port.Close();
 
-                Console.WriteLine("3. Waiting for bootloader port...");
                 var newPort = await portScanner.WaitForBootloaderPortAsync(
                     session!.Port,
                     TimeSpan.FromSeconds(PortSwitchTimeoutSeconds),
                     ct);
 
-                Console.WriteLine($"4. Found port: {newPort}");
                 if (string.IsNullOrWhiteSpace(newPort))
                 {
                     throw new DeviceConnectionException("Bootloader port not found.");
                 }
 
-                Console.WriteLine($"5. Opening {newPort}...");
                 port.Open(newPort, ArduPilotConstants.BootloaderBaudRate);
 
-                Console.WriteLine("6. Syncing...");
                 var syncOk = await bootloader.SyncAsync(ct);
-                Console.WriteLine($"7. Sync result: {syncOk}");
                 if (!syncOk)
                 {
                     port.Close();
                     throw new DeviceConnectionException("Bootloader sync failed.");
                 }
 
-                Console.WriteLine("8. Getting device info...");
+                // Read device info to complete bootloader initialization
+                //await bootloader.GetDeviceInfoAsync(ct);
+
+                //currentMode = BootMode.Bootloader;
+
                 await bootloader.GetDeviceInfoAsync(ct);
-                Console.WriteLine("9. Done!");
+
+                // Try to switch to faster baud rate for flashing
+                try
+                {
+                    await bootloader.SetBaudRateAsync(ArduPilotConstants.FlashBaudRate, ct);
+                }
+                catch
+                {
+                    // Bootloader doesn't support baud rate change — stay at 115200
+                }
 
                 currentMode = BootMode.Bootloader;
                 UpdateSessionPortAndState(newPort, DeviceState.InBootloader);
