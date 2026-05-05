@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using APConfigManager.Core.Enums;
 using APConfigManager.Core.Exceptions;
 using APConfigManager.Core.Interfaces.Drivers;
@@ -55,20 +56,35 @@ public class ArduPilotDriver : IAutopilotDriver
         {
             await this.telemetry.SendHeartbeatAsync(ct);
             await WaitForDeviceHeartbeatAsync(ct);
+            currentMode = BootMode.Normal;
         }
         catch
         {
-            this.port.Close();
-            throw;
+            this.port.Flush();
+            var syncOk = await this.bootloader.SyncAsync(ct);
+
+            if (syncOk)
+            {
+                this.currentMode = BootMode.Bootloader;
+            }
+            else
+            {
+                this.port.Close();
+                throw new DeviceConnectionException(
+                    $"No response from device on port {port} (neither MAVLink nor bootloader).");
+            }
         }
 
-        currentMode = BootMode.Normal;
+        var state = this.currentMode == BootMode.Bootloader
+            ? DeviceState.InBootloader
+            : DeviceState.Connected;
+
         session = new DeviceSession
         {
             Id = Guid.NewGuid(),
             Port = port,
             BaudRate = baudRate,
-            State = DeviceState.Connected,
+            State = state,
             ConnectedAt = DateTime.UtcNow
         };
 
@@ -115,6 +131,7 @@ public class ArduPilotDriver : IAutopilotDriver
             var expectedCrc = CalculateCrc32(firmware.ImageBytes);
 
             progress.Report((0, "Erasing..."));
+            await this.bootloader.SyncAsync(ct);
             await this.bootloader.ChipEraseAsync(ct);
 
             var bytesWritten = 0;
@@ -189,6 +206,7 @@ public class ArduPilotDriver : IAutopilotDriver
             await this.bootloader.GetDeviceInfoAsync(ct);
 
             progress.Report((10, "Erasing..."));
+            await this.bootloader.SyncAsync(ct);
             await this.bootloader.ChipEraseAsync(ct);
 
             progress.Report((80, "Booting..."));

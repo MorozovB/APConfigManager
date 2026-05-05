@@ -244,6 +244,11 @@ public class MavLinkProtocol : ITelemetryProtocol
 
             return msg;
         }
+        catch (TimeoutException)
+        {
+            // Serial port read timeout — no data available
+            return null;
+        }
         catch (Exception) when (!ct.IsCancellationRequested)
         {
             return null;
