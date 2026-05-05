@@ -83,10 +83,10 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
         /// </summary>
         public async Task<DeviceInfo> GetDeviceInfoAsync(CancellationToken ct)
         {
-            var boardId = await ReadRegisterAsync(ArduPilotConstants.GET_DEVICE, ct);
-            var boardRevision = await ReadRegisterAsync(ArduPilotConstants.GET_DEVICE, ct);
-            var flashSize = await ReadRegisterAsync(ArduPilotConstants.GET_DEVICE, ct);
-            var bootloaderRevision = await ReadRegisterAsync(ArduPilotConstants.GET_DEVICE, ct);
+            var boardId = await ReadRegisterAsync(ArduPilotConstants.GET_DEVICE, ArduPilotConstants.InfoBoardId, ct);
+            var boardRevision = await ReadRegisterAsync(ArduPilotConstants.GET_DEVICE, ArduPilotConstants.InfoBoardRev, ct);
+            var flashSize = await ReadRegisterAsync(ArduPilotConstants.GET_DEVICE, ArduPilotConstants.InfoFlashSize, ct);
+            var bootloaderRevision = await ReadRegisterAsync(ArduPilotConstants.GET_DEVICE, ArduPilotConstants.InfoBlRev, ct);
 
             return new DeviceInfo
             {
@@ -97,6 +97,7 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
             };
 
         }
+
 
         /// <summary>
         /// Performs full chip erase. May take up to 30 seconds.
@@ -243,28 +244,70 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
         /// <summary>
         /// Sends a GET_DEVICE command and reads a 4-byte unsigned integer response.
         /// </summary>
+        private async Task<uint> ReadRegisterAsync(byte command, byte infoType, CancellationToken ct)
+        {
+            var request = new byte[] { command, infoType, ArduPilotConstants.EOC };
+            await port.WriteAsync(request, 0, request.Length, ct);
+
+            var response = new byte[6];
+            var bytesRead = 0;
+
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(3000);
+
+            try
+            {
+                while (bytesRead < 6)
+                {
+                    var read = await port.ReadAsync(response, bytesRead, 6 - bytesRead, cts.Token);
+                    if (read == 0)
+                        throw new BootloaderException("Connection lost while reading device info.");
+                    bytesRead += read;
+                }
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                throw new BootloaderException($"Timeout reading device info. Got {bytesRead}/6 bytes.");
+            }
+
+            CheckResponse(response);
+            return BitConverter.ToUInt32(response, 0);
+        }
+
+        /// <summary>
+        /// Sends a command and reads a 4-byte unsigned integer response (no info_type).
+        /// Used by GET_CRC.
+        /// </summary>
         private async Task<uint> ReadRegisterAsync(byte command, CancellationToken ct)
         {
             var request = new byte[] { command, ArduPilotConstants.EOC };
             await port.WriteAsync(request, 0, request.Length, ct);
 
-            // Read 4 data bytes + 2 status bytes (INSYNC + OK)
             var response = new byte[6];
             var bytesRead = 0;
 
-            while (bytesRead < 6)
-            {
-                var read = await port.ReadAsync(response, bytesRead, 6 - bytesRead, ct);
-                if (read == 0)
-                    throw new BootloaderException("Connection lost while reading device info.");
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(3000);
 
-                bytesRead += read;
+            try
+            {
+                while (bytesRead < 6)
+                {
+                    var read = await port.ReadAsync(response, bytesRead, 6 - bytesRead, cts.Token);
+                    if (read == 0)
+                        throw new BootloaderException("Connection lost.");
+                    bytesRead += read;
+                }
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                throw new BootloaderException($"Timeout reading response. Got {bytesRead}/6 bytes.");
             }
 
             CheckResponse(response);
-
             return BitConverter.ToUInt32(response, 0);
         }
+
 
         /// <summary>
         /// Validates the bootloader response bytes.

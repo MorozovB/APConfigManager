@@ -26,7 +26,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowLocalhost", policy =>
     {
-        policy.WithOrigins("http://localhost:5173", "http://localhost:3000")
+        policy.SetIsOriginAllowed(_ => true)    // WithOrigins("http://localhost:5173", "http://localhost:3000")
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -48,7 +48,7 @@ builder.Services.AddSingleton<ISettingsRepository, SettingsRepository>();
 builder.Services.AddSingleton<IDeviceProfileRepository, DeviceProfileRepository>();
 
 // ─── Transport ──────────────────────────────────
-builder.Services.AddTransient<ISerialPortAdapter, SerialPortAdapter>();
+// builder.Services.AddTransient<ISerialPortAdapter, SerialPortAdapter>();
 builder.Services.AddSingleton<IPortScanner, PortScanner>();
 
 // ─── Parsers ────────────────────────────────────
@@ -56,17 +56,30 @@ builder.Services.AddSingleton<IFirmwareParser, ApjFirmwareParser>();
 builder.Services.AddSingleton<IParamFileParser, ParamFileParser>();
 
 // ─── Protocols ──────────────────────────────────
-builder.Services.AddTransient<IBootloaderProtocol, StmBootloaderProtocol>();
-builder.Services.AddTransient<ITelemetryProtocol, MavLinkProtocol>();
+// builder.Services.AddTransient<IBootloaderProtocol, StmBootloaderProtocol>();
+// builder.Services.AddTransient<ITelemetryProtocol, MavLinkProtocol>();
 
 // ─── Driver ─────────────────────────────────────
-builder.Services.AddTransient<IAutopilotDriver, ArduPilotDriver>();
+// builder.Services.AddTransient<IAutopilotDriver, ArduPilotDriver>();
+
+builder.Services.AddSingleton<ISessionManager>(sp =>
+{
+    var portScanner = sp.GetRequiredService<IPortScanner>();
+
+    return new SessionManager(() =>
+    {
+        var port = new SerialPortAdapter();
+        var bootloader = new StmBootloaderProtocol(port);
+        var telemetry = new MavLinkProtocol(port);
+        return new ArduPilotDriver(port, bootloader, telemetry, portScanner);
+    });
+});
 
 // ─── Services ───────────────────────────────────
 builder.Services.AddSingleton<IFirmwareValidator, FirmwareValidator>();
 
-builder.Services.AddSingleton<ISessionManager>(sp =>
-    new SessionManager(() => sp.GetRequiredService<IAutopilotDriver>()));
+//builder.Services.AddSingleton<ISessionManager>(sp =>
+//    new SessionManager(() => sp.GetRequiredService<IAutopilotDriver>()));
 
 builder.Services.AddScoped<IFlashService, FlashService>();
 builder.Services.AddScoped<IEraseService, EraseService>();

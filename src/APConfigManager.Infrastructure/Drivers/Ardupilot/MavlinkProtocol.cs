@@ -11,16 +11,16 @@ namespace APConfigManager.Infrastructure.Drivers.ArduPilot;
 /// </summary>
 public class MavLinkProtocol : ITelemetryProtocol
 {
-    private readonly ISerialPortAdapter _port;
-    private readonly MavlinkParse _parser;
+    private readonly ISerialPortAdapter port;
+    private readonly MavlinkParse parser;
 
     /// <summary>
     /// Initializes the MAVLink protocol with a serial port adapter.
     /// </summary>
     public MavLinkProtocol(ISerialPortAdapter port)
     {
-        _port = port;
-        _parser = new MavlinkParse();
+        this.port = port;
+        parser = new MavlinkParse();
     }
 
     /// <summary>
@@ -37,13 +37,13 @@ public class MavLinkProtocol : ITelemetryProtocol
             mavlink_version = 3
         };
 
-        var packet = _parser.GenerateMAVLinkPacket10(
+        var packet = parser.GenerateMAVLinkPacket10(
             MAVLINK_MSG_ID.HEARTBEAT,
             heartbeat,
             ArduPilotConstants.MavSysId,
             ArduPilotConstants.MavCompId);
 
-        await _port.WriteAsync(packet, 0, packet.Length, ct);
+        await port.WriteAsync(packet, 0, packet.Length, ct);
     }
 
     /// <summary>
@@ -60,13 +60,13 @@ public class MavLinkProtocol : ITelemetryProtocol
             param1 = 3
         };
 
-        var packet = _parser.GenerateMAVLinkPacket10(
+        var packet = parser.GenerateMAVLinkPacket10(
             MAVLINK_MSG_ID.COMMAND_LONG,
             command,
             ArduPilotConstants.MavSysId,
             ArduPilotConstants.MavCompId);
 
-        await _port.WriteAsync(packet, 0, packet.Length, ct);
+        await port.WriteAsync(packet, 0, packet.Length, ct);
     }
 
     /// <summary>
@@ -80,13 +80,13 @@ public class MavLinkProtocol : ITelemetryProtocol
             target_component = 1
         };
 
-        var packet = _parser.GenerateMAVLinkPacket10(
+        var packet = parser.GenerateMAVLinkPacket10(
             MAVLINK_MSG_ID.PARAM_REQUEST_LIST,
             request,
             ArduPilotConstants.MavSysId,
             ArduPilotConstants.MavCompId);
 
-        await _port.WriteAsync(packet, 0, packet.Length, ct);
+        await port.WriteAsync(packet, 0, packet.Length, ct);
 
         var parameters = new List<Parameter>();
         var totalExpected = -1;
@@ -136,13 +136,13 @@ public class MavLinkProtocol : ITelemetryProtocol
             param_type = (byte)MAV_PARAM_TYPE.REAL32
         };
 
-        var packet = _parser.GenerateMAVLinkPacket10(
+        var packet = parser.GenerateMAVLinkPacket10(
             MAVLINK_MSG_ID.PARAM_SET,
             paramSet,
             ArduPilotConstants.MavSysId,
             ArduPilotConstants.MavCompId);
 
-        await _port.WriteAsync(packet, 0, packet.Length, ct);
+        await port.WriteAsync(packet, 0, packet.Length, ct);
 
         var response = await WaitForMessageAsync(
             MAVLINK_MSG_ID.PARAM_VALUE,
@@ -170,13 +170,13 @@ public class MavLinkProtocol : ITelemetryProtocol
             param1 = (uint)MAVLINK_MSG_ID.AUTOPILOT_VERSION
         };
 
-        var packet = _parser.GenerateMAVLinkPacket10(
+        var packet = parser.GenerateMAVLinkPacket10(
             MAVLINK_MSG_ID.COMMAND_LONG,
             command,
             ArduPilotConstants.MavSysId,
             ArduPilotConstants.MavCompId);
 
-        await _port.WriteAsync(packet, 0, packet.Length, ct);
+        await port.WriteAsync(packet, 0, packet.Length, ct);
 
         var response = await WaitForMessageAsync(
             MAVLINK_MSG_ID.AUTOPILOT_VERSION,
@@ -193,6 +193,15 @@ public class MavLinkProtocol : ITelemetryProtocol
     }
 
     /// <summary>
+    /// Waiting for a heartbeat message from the device, with a specified timeout.
+    /// </summary>
+    public async Task<bool> WaitForHeartbeatAsync(int timeoutMs, CancellationToken ct)
+    {
+        var msg = await WaitForMessageAsync(MAVLINK_MSG_ID.HEARTBEAT, timeoutMs, ct);
+        return msg is not null;
+    }
+
+    /// <summary>
     /// Sends MAV_CMD_PREFLIGHT_STORAGE (245) to reset parameters to defaults.
     /// </summary>
     public async Task ResetParamsAsync(CancellationToken ct)
@@ -206,18 +215,16 @@ public class MavLinkProtocol : ITelemetryProtocol
             param1 = 2
         };
 
-        var packet = _parser.GenerateMAVLinkPacket10(
+        var packet = parser.GenerateMAVLinkPacket10(
             MAVLINK_MSG_ID.COMMAND_LONG,
             command,
             ArduPilotConstants.MavSysId,
             ArduPilotConstants.MavCompId);
 
-        await _port.WriteAsync(packet, 0, packet.Length, ct);
+        await port.WriteAsync(packet, 0, packet.Length, ct);
 
         await WaitForMessageAsync(MAVLINK_MSG_ID.COMMAND_ACK, 5000, ct);
     }
-
-    // ─── Private helpers ─────────────────────────────────
 
     /// <summary>
     /// Reads and parses a single MAVLink message from the port.
@@ -229,7 +236,7 @@ public class MavLinkProtocol : ITelemetryProtocol
             var msg = await Task.Run(() =>
             {
                 ct.ThrowIfCancellationRequested();
-                return _parser.ReadPacket(_port.BaseStream);
+                return parser.ReadPacket(port.BaseStream);
             }, ct);
 
             if (msg == null || msg.data == null)

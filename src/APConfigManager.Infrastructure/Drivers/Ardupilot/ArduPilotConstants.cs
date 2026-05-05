@@ -67,5 +67,26 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
 
         /// <summary>Default baud rate for MAVLink communication.</summary>
         public const int MavlinkBaudRate = 115200;
+
+        /// <summary>
+        /// Info request IDs for GET_DEVICE command:
+        /// </summary>
+        public const byte InfoBoardId = 0x02;
+
+        /// <summary>
+        /// Get board revision
+        /// </summary>
+        public const byte InfoBoardRev = 0x03;
+
+        /// <summary>
+        /// Info request for flash size in KB (e.g. 512 for STM32F405).
+        /// Note that this is not the same as the size of the firmware binary, which may be smaller due to reserved bootloader space.
+        /// </summary>
+        public const byte InfoFlashSize = 0x04;
+
+        /// <summary>
+        /// Represents the revision number of the information block.
+        /// </summary>
+        public const byte InfoBlRev = 0x01;
     }
 }

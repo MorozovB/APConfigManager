@@ -33,6 +33,11 @@ namespace APConfigManager.Core.Interfaces.Drivers
         Task<string> GetFirmwareVersionAsync(CancellationToken ct);
 
         /// <summary>
+        /// Waiting for a heartbeat message from the device, with a specified timeout.
+        /// </summary>
+        Task<bool> WaitForHeartbeatAsync(int timeoutMs, CancellationToken ct);
+
+        /// <summary>
         /// MAVLink CMD 245-reset parameters to defaults.
         /// </summary>
         Task ResetParamsAsync(CancellationToken ct);

@@ -4,6 +4,7 @@ using APConfigManager.Core.Interfaces.Drivers;
 using APConfigManager.Core.Interfaces.Transport;
 using APConfigManager.Core.Models;
 using APConfigManager.Core.Results;
+using APConfigManager.Infrastructure.Transport;
 
 namespace APConfigManager.Infrastructure.Drivers.Ardupilot;
 
@@ -18,13 +19,13 @@ public class ArduPilotDriver : IAutopilotDriver
     private const int PortSwitchTimeoutSeconds = 20;
     private const int WriteParamsPasses = 3;
 
-    private readonly ISerialPortAdapter _port;
-    private readonly IBootloaderProtocol _bootloader;
-    private readonly ITelemetryProtocol _telemetry;
-    private readonly IPortScanner _portScanner;
+    private readonly ISerialPortAdapter port;
+    private readonly IBootloaderProtocol bootloader;
+    private readonly ITelemetryProtocol telemetry;
+    private readonly IPortScanner portScanner;
 
     private DeviceSession? session;
-    private BootMode _currentMode = BootMode.Normal;
+    private BootMode currentMode = BootMode.Normal;
 
     /// <summary>
     /// Initializes the driver with protocol and transport dependencies.
@@ -35,10 +36,10 @@ public class ArduPilotDriver : IAutopilotDriver
         ITelemetryProtocol telemetryProtocol,
         IPortScanner portScanner)
     {
-        _port = port;
-        _bootloader = bootloaderProtocol;
-        _telemetry = telemetryProtocol;
-        _portScanner = portScanner;
+        this.port = port;
+        this.bootloader = bootloaderProtocol;
+        this.telemetry = telemetryProtocol;
+        this.portScanner = portScanner;
     }
 
     /// <summary>
@@ -48,20 +49,20 @@ public class ArduPilotDriver : IAutopilotDriver
     /// </summary>
     public async Task<DeviceSession> ConnectAsync(string port, int baudRate, CancellationToken ct)
     {
-        _port.Open(port, baudRate);
+        this.port.Open(port, baudRate);
 
         try
         {
-            await _telemetry.SendHeartbeatAsync(ct);
+            await this.telemetry.SendHeartbeatAsync(ct);
             await WaitForDeviceHeartbeatAsync(ct);
         }
         catch
         {
-            _port.Close();
+            this.port.Close();
             throw;
         }
 
-        _currentMode = BootMode.Normal;
+        currentMode = BootMode.Normal;
         session = new DeviceSession
         {
             Id = Guid.NewGuid(),
@@ -82,7 +83,7 @@ public class ArduPilotDriver : IAutopilotDriver
     {
         EnsureConnected();
         await EnsureModeAsync(BootMode.Bootloader, ct);
-        return await _bootloader.GetDeviceInfoAsync(ct);
+        return await this.bootloader.GetDeviceInfoAsync(ct);
     }
 
     /// <summary>
@@ -114,7 +115,7 @@ public class ArduPilotDriver : IAutopilotDriver
             var expectedCrc = CalculateCrc32(firmware.ImageBytes);
 
             progress.Report((0, "Erasing..."));
-            await _bootloader.ChipEraseAsync(ct);
+            await this.bootloader.ChipEraseAsync(ct);
 
             var bytesWritten = 0;
             var totalBytes = firmware.ImageBytes.Length;
@@ -127,7 +128,7 @@ public class ArduPilotDriver : IAutopilotDriver
                 var chunk = new byte[size];
                 Array.Copy(firmware.ImageBytes, offset, chunk, 0, size);
 
-                await _bootloader.ProgramMultiAsync(chunk, ct);
+                await this.bootloader.ProgramMultiAsync(chunk, ct);
                 bytesWritten += size;
 
                 var percent = (int)(80.0 * bytesWritten / totalBytes);
@@ -135,7 +136,7 @@ public class ArduPilotDriver : IAutopilotDriver
             }
 
             progress.Report((90, "Verifying..."));
-            var crcOk = await _bootloader.VerifyCrcAsync(expectedCrc, ct);
+            var crcOk = await this.bootloader.VerifyCrcAsync(expectedCrc, ct);
             if (!crcOk)
             {
                 return new FlashResult
@@ -148,8 +149,8 @@ public class ArduPilotDriver : IAutopilotDriver
             }
 
             progress.Report((95, "Booting..."));
-            await _bootloader.BootAsync(ct);
-            _currentMode = BootMode.Normal;
+            await this.bootloader.BootAsync(ct);
+            currentMode = BootMode.Normal;
             UpdateSessionState(DeviceState.Connected);
             progress.Report((100, "Done"));
 
@@ -175,8 +176,8 @@ public class ArduPilotDriver : IAutopilotDriver
     /// Switches to bootloader mode, erases, then boots back to normal mode.
     /// </summary>
     public async Task<EraseResult> EraseAsync(
-        IProgress<(int percent, string message)> progress,
-        CancellationToken ct)
+    IProgress<(int percent, string message)> progress,
+    CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(progress);
         EnsureConnected();
@@ -184,20 +185,20 @@ public class ArduPilotDriver : IAutopilotDriver
 
         try
         {
-            progress.Report((0, "Erasing..."));
-            await _bootloader.ChipEraseAsync(ct);
+            progress.Report((0, "Reading device info..."));
+            await this.bootloader.GetDeviceInfoAsync(ct);
+
+            progress.Report((10, "Erasing..."));
+            await this.bootloader.ChipEraseAsync(ct);
 
             progress.Report((80, "Booting..."));
-            await _bootloader.BootAsync(ct);
+            await this.bootloader.BootAsync(ct);
 
-            _currentMode = BootMode.Normal;
+            currentMode = BootMode.Normal;
             UpdateSessionState(DeviceState.Connected);
             progress.Report((100, "Done"));
 
-            return new EraseResult
-            {
-                Success = true
-            };
+            return new EraseResult { Success = true };
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -217,7 +218,7 @@ public class ArduPilotDriver : IAutopilotDriver
     {
         EnsureConnected();
         await EnsureModeAsync(BootMode.Normal, ct);
-        return await _telemetry.RequestAllParamsAsync(ct);
+        return await this.telemetry.RequestAllParamsAsync(ct);
     }
 
     /// <summary>
@@ -248,7 +249,7 @@ public class ArduPilotDriver : IAutopilotDriver
                 {
                     ct.ThrowIfCancellationRequested();
 
-                    var confirmed = await _telemetry.SetParamAsync(parameter, ct);
+                    var confirmed = await this.telemetry.SetParamAsync(parameter, ct);
                     if (confirmed)
                     {
                         sent++;
@@ -298,31 +299,79 @@ public class ArduPilotDriver : IAutopilotDriver
 
         try
         {
+            //if (mode == BootMode.Bootloader)
+            //{
+            //    await telemetry.RebootToBootloaderAsync(ct);
+            //    port.Close();
+
+            //    var newPort = await portScanner.WaitForBootloaderPortAsync(
+            //        session!.Port,
+            //        TimeSpan.FromSeconds(PortSwitchTimeoutSeconds),
+            //        ct);
+
+            //    if (string.IsNullOrWhiteSpace(newPort))
+            //    {
+            //        throw new DeviceConnectionException("Bootloader port not found.");
+            //    }
+
+            //    port.Open(newPort, ArduPilotConstants.BootloaderBaudRate);
+
+            //    var syncOk = await bootloader.SyncAsync(ct);
+            //    if (!syncOk)
+            //    {
+            //        port.Close();
+            //        throw new DeviceConnectionException("Bootloader sync failed.");
+            //    }
+
+            //    // Read device info to complete bootloader initialization
+            //    await bootloader.GetDeviceInfoAsync(ct);
+
+            //    currentMode = BootMode.Bootloader;
+            //    UpdateSessionPortAndState(newPort, DeviceState.InBootloader);
+
+            //    return new BootResult
+            //    {
+            //        Success = true,
+            //        NewPort = newPort
+            //    };
+            //}
             if (mode == BootMode.Bootloader)
             {
-                await _telemetry.RebootToBootloaderAsync(ct);
-                _port.Close();
+                Console.WriteLine("1. Sending reboot command...");
+                await telemetry.RebootToBootloaderAsync(ct);
 
-                var newPort = await _portScanner.WaitForBootloaderPortAsync(
+                Console.WriteLine("2. Closing port...");
+                port.Close();
+
+                Console.WriteLine("3. Waiting for bootloader port...");
+                var newPort = await portScanner.WaitForBootloaderPortAsync(
                     session!.Port,
                     TimeSpan.FromSeconds(PortSwitchTimeoutSeconds),
                     ct);
 
+                Console.WriteLine($"4. Found port: {newPort}");
                 if (string.IsNullOrWhiteSpace(newPort))
                 {
                     throw new DeviceConnectionException("Bootloader port not found.");
                 }
 
-                _port.Open(newPort, ArduPilotConstants.BootloaderBaudRate);
+                Console.WriteLine($"5. Opening {newPort}...");
+                port.Open(newPort, ArduPilotConstants.BootloaderBaudRate);
 
-                var syncOk = await _bootloader.SyncAsync(ct);
+                Console.WriteLine("6. Syncing...");
+                var syncOk = await bootloader.SyncAsync(ct);
+                Console.WriteLine($"7. Sync result: {syncOk}");
                 if (!syncOk)
                 {
-                    _port.Close();
+                    port.Close();
                     throw new DeviceConnectionException("Bootloader sync failed.");
                 }
 
-                _currentMode = BootMode.Bootloader;
+                Console.WriteLine("8. Getting device info...");
+                await bootloader.GetDeviceInfoAsync(ct);
+                Console.WriteLine("9. Done!");
+
+                currentMode = BootMode.Bootloader;
                 UpdateSessionPortAndState(newPort, DeviceState.InBootloader);
 
                 return new BootResult
@@ -333,11 +382,11 @@ public class ArduPilotDriver : IAutopilotDriver
             }
 
             // Normal mode: boot from bootloader, wait for device to reappear
-            await _bootloader.BootAsync(ct);
-            _port.Close();
+            await this.bootloader.BootAsync(ct);
+            this.port.Close();
 
-            var portsBeforeNormal = _portScanner.GetAvailablePorts();
-            var newNormalPort = await _portScanner.WaitForNewPortAsync(
+            var portsBeforeNormal = this.portScanner.GetAvailablePorts();
+            var newNormalPort = await this.portScanner.WaitForNewPortAsync(
                 portsBeforeNormal,
                 TimeSpan.FromSeconds(PortSwitchTimeoutSeconds),
                 ct);
@@ -346,20 +395,20 @@ public class ArduPilotDriver : IAutopilotDriver
                 ? session!.Port
                 : newNormalPort;
 
-            _port.Open(targetPort, session!.BaudRate);
+            this.port.Open(targetPort, session!.BaudRate);
 
             try
             {
-                await _telemetry.SendHeartbeatAsync(ct);
+                await this.telemetry.SendHeartbeatAsync(ct);
                 await WaitForDeviceHeartbeatAsync(ct);
             }
             catch
             {
-                _port.Close();
+                this.port.Close();
                 throw;
             }
 
-            _currentMode = BootMode.Normal;
+            this.currentMode = BootMode.Normal;
             UpdateSessionPortAndState(targetPort, DeviceState.Connected);
 
             return new BootResult
@@ -385,7 +434,7 @@ public class ArduPilotDriver : IAutopilotDriver
     {
         EnsureConnected();
         await EnsureModeAsync(BootMode.Normal, ct);
-        return await _telemetry.GetFirmwareVersionAsync(ct);
+        return await this.telemetry.GetFirmwareVersionAsync(ct);
     }
 
     /// <summary>
@@ -395,7 +444,7 @@ public class ArduPilotDriver : IAutopilotDriver
     {
         EnsureConnected();
         await EnsureModeAsync(BootMode.Normal, ct);
-        await _telemetry.ResetParamsAsync(ct);
+        await this.telemetry.ResetParamsAsync(ct);
     }
 
     /// <summary>
@@ -404,13 +453,13 @@ public class ArduPilotDriver : IAutopilotDriver
     /// </summary>
     public Task DisconnectAsync()
     {
-        if (_port.IsOpen)
+        if (this.port.IsOpen)
         {
-            _port.Close();
+            this.port.Close();
         }
 
         session = null;
-        _currentMode = BootMode.Normal;
+        this.currentMode = BootMode.Normal;
         return Task.CompletedTask;
     }
 
@@ -419,7 +468,7 @@ public class ArduPilotDriver : IAutopilotDriver
     /// </summary>
     private void EnsureConnected()
     {
-        if (session is null || !_port.IsOpen)
+        if (session is null || !this.port.IsOpen)
         {
             throw new SessionException("No active session. Call ConnectAsync first.");
         }
@@ -430,7 +479,7 @@ public class ArduPilotDriver : IAutopilotDriver
     /// </summary>
     private async Task EnsureModeAsync(BootMode mode, CancellationToken ct)
     {
-        if (_currentMode == mode)
+        if (this.currentMode == mode)
         {
             return;
         }
@@ -490,24 +539,11 @@ public class ArduPilotDriver : IAutopilotDriver
     /// </summary>
     private async Task WaitForDeviceHeartbeatAsync(CancellationToken ct)
     {
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        cts.CancelAfter(HeartbeatTimeoutMs);
+        await telemetry.SendHeartbeatAsync(ct);
 
-        try
-        {
-            while (true)
-            {
-                await _telemetry.SendHeartbeatAsync(cts.Token);
-                await Task.Delay(500, cts.Token);
+        var received = await telemetry.WaitForHeartbeatAsync(HeartbeatTimeoutMs, ct);
 
-                var version = await _telemetry.GetFirmwareVersionAsync(cts.Token);
-                if (!string.IsNullOrWhiteSpace(version))
-                {
-                    return;
-                }
-            }
-        }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        if (!received)
         {
             throw new DeviceConnectionException("No heartbeat response from device.");
         }
