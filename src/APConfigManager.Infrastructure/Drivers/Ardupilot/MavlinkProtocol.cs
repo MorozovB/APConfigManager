@@ -236,18 +236,20 @@ public class MavLinkProtocol : ITelemetryProtocol
             var msg = await Task.Run(() =>
             {
                 ct.ThrowIfCancellationRequested();
-                return parser.ReadPacket(port.BaseStream);
+                try
+                {
+                    return parser.ReadPacket(port.BaseStream);
+                }
+                catch (TimeoutException)
+                {
+                    return null;
+                }
             }, ct);
 
             if (msg == null || msg.data == null)
                 return null;
 
             return msg;
-        }
-        catch (TimeoutException)
-        {
-            // Serial port read timeout — no data available
-            return null;
         }
         catch (Exception) when (!ct.IsCancellationRequested)
         {
