@@ -43,5 +43,10 @@ namespace APConfigManager.Core.Interfaces.Drivers
         /// </summary>
         Task BootAsync(CancellationToken ct);
 
+        /// <summary>
+        /// Reads CRC-32 from the device.
+        /// </summary>
+        Task<uint> GetCrcAsync(CancellationToken ct);
+
     }
 }

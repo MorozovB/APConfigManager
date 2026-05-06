@@ -42,7 +42,7 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
         public const byte INVALID = 0x13;
 
         /// <summary>Maximum bytes per PROG_MULTI write (64 bytes).</summary>
-        public const int ProgMultiMaxSize = 252;
+        public const int ProgMultiMaxSize = 64;
 
         /// <summary>Timeout for bootloader sync in milliseconds.</summary>
         public const int SyncTimeoutMs = 1000;

@@ -217,31 +217,6 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
         }
 
         /// <summary>
-        /// Calculates CRC-32/POSIX checksum.
-        /// </summary>
-        private static uint CalculateCrc32(byte[] data)
-        {
-            ArgumentNullException.ThrowIfNull(data);
-            const uint polynomial = 0xEDB88320;
-            uint crc = 0xFFFFFFFF;
-
-            foreach (var value in data)
-            {
-                crc ^= value;
-                for (int i = 0; i < 8; i++)
-                {
-                    var lsb = crc & 1;
-                    crc >>= 1;
-                    if (lsb != 0)
-                    {
-                        crc ^= polynomial;
-                    }
-                }
-            }
-            return ~crc;
-        }
-
-        /// <summary>
         /// Sends a GET_DEVICE command and reads a 4-byte unsigned integer response.
         /// </summary>
         private async Task<uint> ReadRegisterAsync(byte command, byte infoType, CancellationToken ct)
@@ -331,6 +306,14 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
             {
                 throw new BootloaderException($"Unexpected bootloader status: 0x{status:X2}.");
             }
+        }
+
+        /// <summary>
+        /// Reads CRC-32 from the device.
+        /// </summary>
+        public async Task<uint> GetCrcAsync(CancellationToken ct)
+        {
+            return await ReadRegisterAsync(ArduPilotConstants.GET_CRC, ct);
         }
     }
 }
