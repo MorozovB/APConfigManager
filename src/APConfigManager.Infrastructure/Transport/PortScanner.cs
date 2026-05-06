@@ -102,5 +102,46 @@ namespace APConfigManager.Infrastructure.Transport
             }
         }
 
+        public async Task<string?> WaitForBootloaderPortAsync(
+            string originalPort,
+            List<string> portsBefore,
+            TimeSpan timeout,
+            CancellationToken ct)
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(timeout);
+
+            try
+            {
+                // Wait for original port to disappear first
+                while (true)
+                {
+                    await Task.Delay(300, cts.Token);
+                    var current = GetAvailablePorts();
+
+                    if (!current.Contains(originalPort))
+                        break;
+                }
+
+                // Now wait for a new port or original port to reappear
+                while (true)
+                {
+                    await Task.Delay(300, cts.Token);
+                    var current = GetAvailablePorts();
+
+                    var newPort = current.FirstOrDefault(p => !portsBefore.Contains(p));
+                    if (newPort is not null)
+                        return newPort;
+
+                    if (current.Contains(originalPort))
+                        return originalPort;
+                }
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                return null;
+            }
+        }
+
     }
 }

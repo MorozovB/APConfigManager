@@ -20,5 +20,7 @@ namespace APConfigManager.Core.Interfaces.Transport
         /// Waiting for the bootloader port (may differ from the original).
         /// </summary>
         Task<string?> WaitForBootloaderPortAsync(string originalPort, TimeSpan timeout, CancellationToken ct);
+
+        Task<string?> WaitForBootloaderPortAsync(string originalPort, List<string> portsBefore, TimeSpan timeout, CancellationToken ct);
     }
 }

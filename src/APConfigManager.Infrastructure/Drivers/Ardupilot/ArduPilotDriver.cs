@@ -158,10 +158,12 @@ public class ArduPilotDriver : IAutopilotDriver
         ArgumentNullException.ThrowIfNull(firmware);
         ArgumentNullException.ThrowIfNull(progress);
         EnsureConnected();
-        await EnsureModeAsync(BootMode.Bootloader, ct);
+        // await EnsureModeAsync(BootMode.Bootloader, ct);
 
         try
         {
+            await EnsureModeAsync(BootMode.Bootloader, ct);
+
             if (firmware.ImageBytes.Length == 0)
             {
                 return new FlashResult
@@ -227,6 +229,30 @@ public class ArduPilotDriver : IAutopilotDriver
 
             progress.Report((95, "Booting..."));
             await bootloader.BootAsync(ct);
+            port.Close();
+
+            // Wait for device to come back on normal port
+            var portsAfterBoot = portScanner.GetAvailablePorts();
+            var normalPort = await portScanner.WaitForNewPortAsync(
+                portsAfterBoot,
+                TimeSpan.FromSeconds(PortSwitchTimeoutSeconds),
+                ct);
+
+            var targetPort = !string.IsNullOrWhiteSpace(normalPort)
+                ? normalPort
+                : session!.Port;
+
+            try
+            {
+                port.Open(targetPort, session!.BaudRate);
+                await telemetry.SendHeartbeatAsync(ct);
+                await WaitForDeviceHeartbeatAsync(ct);
+            }
+            catch
+            {
+                // Device might take time to boot — session will reconnect on next operation
+            }
+
             currentMode = BootMode.Normal;
             UpdateSessionState(DeviceState.Connected);
             progress.Report((100, "Done"));
@@ -262,6 +288,8 @@ public class ArduPilotDriver : IAutopilotDriver
 
         try
         {
+            await EnsureModeAsync(BootMode.Bootloader, ct);
+
             progress.Report((0, "Reading device info..."));
             await this.bootloader.GetDeviceInfoAsync(ct);
 
@@ -271,7 +299,26 @@ public class ArduPilotDriver : IAutopilotDriver
 
             progress.Report((80, "Booting..."));
             await this.bootloader.BootAsync(ct);
+            port.Close();
 
+            var portsAfterBoot = portScanner.GetAvailablePorts();
+            var normalPort = await portScanner.WaitForNewPortAsync(
+                portsAfterBoot,
+                TimeSpan.FromSeconds(PortSwitchTimeoutSeconds),
+                ct);
+
+            var targetPort = !string.IsNullOrWhiteSpace(normalPort)
+                ? normalPort
+                : session!.Port;
+
+            try
+            {
+                port.Open(targetPort, session!.BaudRate);
+            }
+            catch
+            {
+                // Will reconnect on next operation
+            }
             currentMode = BootMode.Normal;
             UpdateSessionState(DeviceState.Connected);
             progress.Report((100, "Done"));
@@ -379,13 +426,25 @@ public class ArduPilotDriver : IAutopilotDriver
         {
             if (mode == BootMode.Bootloader)
             {
+                var portsBefore = portScanner.GetAvailablePorts();
+
                 await telemetry.RebootToBootloaderAsync(ct);
                 port.Close();
 
                 var newPort = await portScanner.WaitForBootloaderPortAsync(
                     session!.Port,
+                    portsBefore,
                     TimeSpan.FromSeconds(PortSwitchTimeoutSeconds),
                     ct);
+
+                // If no new port appeared, maybe original port came back
+                if (string.IsNullOrWhiteSpace(newPort))
+                {
+                    await Task.Delay(2000, ct);
+                    var currentPorts =  portScanner.GetAvailablePorts();
+                    if (currentPorts.Contains(session!.Port))
+                        newPort = session.Port;
+                }
 
                 if (string.IsNullOrWhiteSpace(newPort))
                 {
@@ -401,22 +460,7 @@ public class ArduPilotDriver : IAutopilotDriver
                     throw new DeviceConnectionException("Bootloader sync failed.");
                 }
 
-                // Read device info to complete bootloader initialization
-                //await bootloader.GetDeviceInfoAsync(ct);
-
-                //currentMode = BootMode.Bootloader;
-
                 await bootloader.GetDeviceInfoAsync(ct);
-
-                // Try to switch to faster baud rate for flashing
-                try
-                {
-                    await bootloader.SetBaudRateAsync(ArduPilotConstants.FlashBaudRate, ct);
-                }
-                catch
-                {
-                    // Bootloader doesn't support baud rate change — stay at 115200
-                }
 
                 currentMode = BootMode.Bootloader;
                 UpdateSessionPortAndState(newPort, DeviceState.InBootloader);
