@@ -352,49 +352,170 @@ public class ArduPilotDriver : IAutopilotDriver
     /// Reports progress as percent (0-100) with pass information.
     /// </summary>
     public async Task<ParameterUploadResult> WriteParamsAsync(
-        List<Parameter> parameters,
-        IProgress<(int current, int total)> progress,
-        CancellationToken ct)
+    List<Parameter> parameters,
+    IProgress<(int current, int total)> progress,
+    CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(parameters);
         ArgumentNullException.ThrowIfNull(progress);
         EnsureConnected();
         await EnsureModeAsync(BootMode.Normal, ct);
 
-        var pending = new List<Parameter>(parameters);
         var sent = 0;
+        var skippedSame = 0;
+        var skippedMissing = 0;
 
         try
         {
+            // Read current parameters from device
+            Console.WriteLine("Reading parameters from device...");
+            var deviceParams = await telemetry.RequestAllParamsAsync(ct);
+            var deviceMap = deviceParams.ToDictionary(p => p.Name, p => p.Value);
+            Console.WriteLine($"Device has {deviceMap.Count} parameters");
+
+            // Compare and find differences
+            var toUpload = new List<Parameter>();
+            var missing = new List<Parameter>();
+
+            foreach (var param in parameters)
+            {
+                if (!deviceMap.TryGetValue(param.Name, out var deviceValue))
+                {
+                    missing.Add(param);
+                    skippedMissing++;
+                    continue;
+                }
+
+                if (Math.Abs(deviceValue - param.Value) < 0.001f)
+                {
+                    skippedSame++;
+                    continue;
+                }
+
+                toUpload.Add(param);
+            }
+
+            Console.WriteLine($"To upload: {toUpload.Count}, already same: {skippedSame}, not on device: {missing.Count}");
+
+            if (toUpload.Count == 0 && missing.Count == 0)
+            {
+                return new ParameterUploadResult
+                {
+                    Success = true,
+                    Sent = 0,
+                    Failed = 0,
+                    Total = parameters.Count
+                };
+            }
+
+            // Multi-pass upload with reboot between passes
+            var pending = new List<Parameter>(toUpload);
+
             for (var pass = 1; pass <= WriteParamsPasses && pending.Count > 0; pass++)
             {
+                Console.WriteLine($"Pass {pass}: sending {pending.Count} parameters");
+
                 var failed = new List<Parameter>();
 
-                foreach (var parameter in pending)
+                foreach (var param in pending)
                 {
                     ct.ThrowIfCancellationRequested();
 
-                    var confirmed = await this.telemetry.SetParamAsync(parameter, ct);
+                    var confirmed = await telemetry.SetParamAsync(param, ct);
                     if (confirmed)
                     {
                         sent++;
+                        Console.WriteLine($"  OK: {param.Name} = {param.Value}");
                     }
                     else
                     {
-                        failed.Add(parameter);
+                        failed.Add(param);
+                        Console.WriteLine($"  FAIL: {param.Name} = {param.Value}");
                     }
 
-                    progress.Report((sent + failed.Count, parameters.Count));
+                    progress.Report((sent + skippedSame + failed.Count + skippedMissing, parameters.Count));
+                    await Task.Delay(50, ct);
                 }
 
                 pending = failed;
+
+                if (pending.Count == 0)
+                    break;
+
+                // Try missing params too — they might appear after reboot
+                if (pass == 1 && missing.Count > 0)
+                {
+                    pending.AddRange(missing);
+                    skippedMissing = 0;
+                    Console.WriteLine($"Added {missing.Count} missing params for retry after reboot");
+                }
+
+                if (pass < WriteParamsPasses)
+                {
+                    Console.WriteLine($"Pass {pass} done. Rebooting to apply parameters...");
+
+                    // Reboot: bootloader → boot → reconnect
+                    await RebootAsync(BootMode.Bootloader, ct);
+                    await bootloader.BootAsync(ct);
+                    port.Close();
+
+                    var portsAfterBoot = portScanner.GetAvailablePorts();
+                    var normalPort = await portScanner.WaitForNewPortAsync(
+                        portsAfterBoot,
+                        TimeSpan.FromSeconds(PortSwitchTimeoutSeconds),
+                        ct);
+
+                    var targetPort = !string.IsNullOrWhiteSpace(normalPort)
+                        ? normalPort
+                        : session!.Port;
+
+                    port.Open(targetPort, session!.BaudRate);
+                    await telemetry.SendHeartbeatAsync(ct);
+                    await WaitForDeviceHeartbeatAsync(ct);
+
+                    currentMode = BootMode.Normal;
+                    UpdateSessionPortAndState(targetPort, DeviceState.Connected);
+
+                    Console.WriteLine($"Reconnected on {targetPort}. Refreshing device params...");
+
+                    // Re-read params after reboot — new params might be available
+                    deviceParams = await telemetry.RequestAllParamsAsync(ct);
+                    deviceMap = deviceParams.ToDictionary(p => p.Name, p => p.Value);
+
+                    // Re-check pending — some might now match after reboot
+                    var stillPending = new List<Parameter>();
+                    foreach (var param in pending)
+                    {
+                        if (deviceMap.TryGetValue(param.Name, out var currentValue)
+                            && Math.Abs(currentValue - param.Value) < 0.001f)
+                        {
+                            sent++;
+                            Console.WriteLine($"  Applied after reboot: {param.Name}");
+                        }
+                        else
+                        {
+                            stillPending.Add(param);
+                        }
+                    }
+
+                    pending = stillPending;
+                    Console.WriteLine($"After reboot: {pending.Count} still pending");
+                }
             }
+
+            // Count remaining missing as skipped
+            skippedMissing = pending.Count(p => !deviceMap.ContainsKey(p.Name));
+            var finalFailed = pending.Count - skippedMissing;
+
+            Console.WriteLine($"Result: sent={sent}, same={skippedSame}, missing={skippedMissing}, failed={finalFailed}");
 
             return new ParameterUploadResult
             {
                 Success = pending.Count == 0,
                 Sent = sent,
-                Failed = pending.Count,
+                Failed = finalFailed,
+                ReadOnly = 0,
+                Hidden = skippedMissing,
                 Total = parameters.Count
             };
         }
@@ -404,7 +525,7 @@ public class ArduPilotDriver : IAutopilotDriver
             {
                 Success = false,
                 Sent = sent,
-                Failed = pending.Count,
+                Failed = parameters.Count - sent - skippedSame - skippedMissing,
                 Total = parameters.Count,
                 ErrorMessage = ex.Message
             };
@@ -536,6 +657,31 @@ public class ArduPilotDriver : IAutopilotDriver
         EnsureConnected();
         await EnsureModeAsync(BootMode.Normal, ct);
         await this.telemetry.ResetParamsAsync(ct);
+
+        Console.WriteLine("Parameters reset. Rebooting to apply...");
+
+        await RebootAsync(BootMode.Bootloader, ct);
+        await bootloader.BootAsync(ct);
+        port.Close();
+
+        var portsAfterBoot = portScanner.GetAvailablePorts();
+        var normalPort = await portScanner.WaitForNewPortAsync(
+            portsAfterBoot,
+            TimeSpan.FromSeconds(PortSwitchTimeoutSeconds),
+            ct);
+
+        var targetPort = !string.IsNullOrWhiteSpace(normalPort)
+            ? normalPort
+            : session!.Port;
+
+        port.Open(targetPort, session!.BaudRate);
+        await telemetry.SendHeartbeatAsync(ct);
+        await WaitForDeviceHeartbeatAsync(ct);
+
+        this.currentMode = BootMode.Normal;
+        UpdateSessionPortAndState(targetPort, DeviceState.Connected);
+
+        Console.WriteLine($"Rebooted. Reconnected on {targetPort}");
     }
 
     /// <summary>
@@ -639,55 +785,6 @@ public class ArduPilotDriver : IAutopilotDriver
             throw new DeviceConnectionException("No heartbeat response from device.");
         }
     }
-
-    /// <summary>
-    /// Calculates CRC-32/POSIX checksum used by STM32 bootloader for flash verification.
-    /// </summary>
-    //private static uint CalculateCrc32(byte[] data)
-    //{
-    //    ArgumentNullException.ThrowIfNull(data);
-
-    //    const uint polynomial = 0x04C11DB7;
-    //    uint crc = 0x00000000;
-
-    //    foreach (var value in data)
-    //    {
-    //        crc ^= (uint)value << 24;
-
-    //        for (var i = 0; i < 8; i++)
-    //        {
-    //            if ((crc & 0x80000000) != 0)
-    //                crc = (crc << 1) ^ polynomial;
-    //            else
-    //                crc <<= 1;
-    //        }
-    //    }
-
-    //    return ~crc;
-    //}
-
-    //private static uint CalculateCrc32(byte[] data)
-    //{
-    //    ArgumentNullException.ThrowIfNull(data);
-
-    //    const uint polynomial = 0xEDB88320;
-
-    //    uint crc = 0;
-
-    //    foreach (var value in data)
-    //    {
-    //        crc ^= value;
-    //        for (var i = 0; i < 8; i++)
-    //        {
-    //            if ((crc & 1) != 0)
-    //                crc = (crc >> 1) ^ polynomial;
-    //            else
-    //                crc >>= 1;
-    //        }
-    //    }
-
-    //    return crc;
-    //}
 
     private static uint CalculateFirmwareCrc(byte[] imageBytes, uint flashSize)
     {
