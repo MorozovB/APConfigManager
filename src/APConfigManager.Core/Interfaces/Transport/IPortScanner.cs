@@ -1,3 +1,5 @@
+using APConfigManager.Core.Models;
+
 namespace APConfigManager.Core.Interfaces.Transport
 {
     /// <summary>
@@ -21,6 +23,24 @@ namespace APConfigManager.Core.Interfaces.Transport
         /// </summary>
         Task<string?> WaitForBootloaderPortAsync(string originalPort, TimeSpan timeout, CancellationToken ct);
 
+        /// <summary>
+        /// Waiting for the bootloader port by comparing the list of ports before and after reboot (handles cases where the port name changes).
+        /// </summary>
         Task<string?> WaitForBootloaderPortAsync(string originalPort, List<string> portsBefore, TimeSpan timeout, CancellationToken ct);
+
+        /// <summary>
+        /// Returns available COM ports with full USB device details (description, serial, VID/PID).
+        /// </summary>
+        List<PortDescription> GetAvailablePortsDetailed();
+
+        /// <summary>
+        /// Returns USB device details for a specific COM port.
+        /// </summary>
+        PortDescription? GetPortDescription(string portName);
+
+        /// <summary>
+        /// Waits for a MAVLink port belonging to the specified device (by USB serial) to appear after reboot.
+        /// </summary>
+        Task<string?> WaitForMavlimkPortAsync(string deviceSerial, List<string> portsBefore, TimeSpan timeOut, CancellationToken ct);
     }
 }

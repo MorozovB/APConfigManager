@@ -31,5 +31,10 @@ namespace APConfigManager.Core.Models
         /// Session creation time
         /// </summary>
         public DateTime? ConnectedAt { get; set; } = DateTime.UtcNow;
+
+        /// <summary>
+        /// Device serial number for session identification and management.
+        /// </summary>
+        public string DeviceSerial { get; set; } = string.Empty;
     }
 }
