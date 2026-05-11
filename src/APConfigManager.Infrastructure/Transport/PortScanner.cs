@@ -17,11 +17,13 @@ namespace APConfigManager.Infrastructure.Transport
         /// </summary>
         public List<string> GetAvailablePorts()
         {
-            string[] ports = SerialPort.GetPortNames();
-
-            return ports
-                .Select(port => port.ToString())
-                .Distinct()
+            return SerialPort.GetPortNames()
+                .Where(p => !IsBluetoothPort(p, string.Empty))
+                .OrderBy(p =>
+                {
+                    var num = int.TryParse(p.Replace("COM", ""), out var n) ? n : 0;
+                    return num;
+                })
                 .ToList();
         }
 
@@ -147,6 +149,142 @@ namespace APConfigManager.Infrastructure.Transport
         }
 
         /// <summary>
+        /// Returns available COM ports with full USB device details.
+        /// </summary>
+        public List<PortDescription> GetAvailablePortsDetailed()
+        {
+            var wmiPorts = QueryPortsFromWmi();
+
+            if (wmiPorts.Count > 0)
+            {
+                return wmiPorts
+                    .Where(p => !IsBluetoothPort(p.Name, p.Description))
+                    .ToList();
+            }
+
+            // Fallback: WMI unavailable — basic info only
+            return SerialPort.GetPortNames()
+                .Where(p => !IsBluetoothPort(p, string.Empty))
+                .OrderBy(p =>
+                {
+                    var num = int.TryParse(p.Replace("COM", ""), out var n) ? n : 0;
+                    return num;
+                })
+                .Select(p => new PortDescription
+                {
+                    Name = p,
+                    Description = string.Empty,
+                    DeviceSerial = string.Empty,
+                    VendorId = string.Empty,
+                    ProductId = string.Empty,
+                    IsMavlink = false
+                })
+                .ToList();
+        }
+
+        /// <summary>
+        /// Checks if a port is a Bluetooth serial port.
+        /// </summary>
+        private static bool IsBluetoothPort(string portName, string description)
+        {
+            var combined = $"{portName} {description}".ToUpperInvariant();
+            return combined.Contains("BLUETOOTH")
+                || combined.Contains("BT ")
+                || combined.Contains("WIRELESS");
+        }
+
+        /// <summary>
+        /// Returns USB device details for a specific COM port.
+        /// </summary>
+        public PortDescription? GetPortDescription(string portName)
+        {
+            return GetAvailablePortsDetailed()
+                .FirstOrDefault(p => p.Name.Equals(portName, StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
+        /// Waits for a MAVLink port belonging to the specified device to appear after reboot.
+        /// Uses USB serial number for device identification.
+        /// </summary>
+        public async Task<string?> WaitForMavlinkPortAsync(
+            string deviceSerial,
+            List<string> portsBefore,
+            TimeSpan timeout,
+            CancellationToken ct)
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(timeout);
+
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            var hasSerial = !string.IsNullOrWhiteSpace(deviceSerial);
+
+            try
+            {
+                while (true)
+                {
+                    await Task.Delay(500, cts.Token);
+
+                    var current = GetAvailablePortsDetailed();
+                    var elapsed = stopwatch.ElapsedMilliseconds;
+
+                    if (hasSerial)
+                    {
+                        // Priority 1: same serial + Mavlink + new port
+                        var ideal = current.FirstOrDefault(p =>
+                            p.DeviceSerial == deviceSerial
+                            && p.IsMavlink
+                            && !portsBefore.Contains(p.Name));
+
+                        if (ideal is not null)
+                            return ideal.Name;
+
+                        // Priority 2: same serial + Mavlink (port name might be reused)
+                        var sameDevice = current.FirstOrDefault(p =>
+                            p.DeviceSerial == deviceSerial
+                            && p.IsMavlink);
+
+                        if (sameDevice is not null)
+                            return sameDevice.Name;
+
+                        // Priority 3: same serial, any port (no Mavlink filter)
+                        if (elapsed > 3000)
+                        {
+                            var anySerial = current.FirstOrDefault(p =>
+                                p.DeviceSerial == deviceSerial
+                                && !portsBefore.Contains(p.Name));
+
+                            if (anySerial is not null)
+                                return anySerial.Name;
+                        }
+                    }
+
+                    // Fallback (after 3 seconds or no serial)
+                    if (!hasSerial || elapsed > 3000)
+                    {
+                        // Priority 4: any new port with Mavlink
+                        var anyMavlink = current.FirstOrDefault(p =>
+                            p.IsMavlink
+                            && !portsBefore.Contains(p.Name));
+
+                        if (anyMavlink is not null)
+                            return anyMavlink.Name;
+
+                        // Priority 5: any new port
+                        var anyNew = current.FirstOrDefault(p =>
+                            !portsBefore.Contains(p.Name));
+
+                        if (anyNew is not null)
+                            return anyNew.Name;
+                    }
+                }
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
         /// Queries Windows Management Instrumentation for COM port details.
         /// </summary>
         private static List<PortDescription> QueryPortsFromWmi()
@@ -165,17 +303,14 @@ namespace APConfigManager.Infrastructure.Transport
                     var name = device["Name"]?.ToString() ?? string.Empty;
                     var pnpDeviceId = device["PNPDeviceID"]?.ToString() ?? string.Empty;
 
-                    // Extract COM port number from name: "Cube Orange+ Mavlink (COM9)" → "COM9"
                     var portMatch = Regex.Match(name, @"\((COM\d+)\)");
                     if (!portMatch.Success)
                         continue;
 
                     var portName = portMatch.Groups[1].Value;
 
-                    // Description = name without "(COMx)" part, trimmed
                     var description = Regex.Replace(name, @"\s*\(COM\d+\)\s*", string.Empty).Trim();
 
-                    // Parse PnPDeviceID: "USB\VID_2DAE&PID_1058\3456789ABC"
                     var vendorId = string.Empty;
                     var productId = string.Empty;
                     var deviceSerial = string.Empty;
@@ -221,6 +356,5 @@ namespace APConfigManager.Infrastructure.Transport
 
             return result;
         }
-
     }
 }

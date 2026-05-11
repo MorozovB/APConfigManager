@@ -103,20 +103,20 @@ public class ArduPilotDriver : IAutopilotDriver
 
             if (syncOk)
             {
-                await bootloader.GetDeviceInfoAsync(ct);
-
-                try
-                {
-                    await bootloader.SetBaudRateAsync(ArduPilotConstants.FlashBaudRate, ct);
-                }
-                catch
-                {
-                    // Stay at default baud rate
-                }
-
+                await this.bootloader.GetDeviceInfoAsync(ct);
                 currentMode = BootMode.Bootloader;
             }
+            else
+            {
+                this.port.Close();
+                throw new DeviceConnectionException(
+                    $"No response from device on port {port} (neither MAVLink nor bootloader).");
+            }
         }
+
+        var portInfo = this.portScanner.GetPortDescription(port);
+
+        this.currentMode = currentMode;
 
         var state = this.currentMode == BootMode.Bootloader
             ? DeviceState.InBootloader
@@ -132,6 +132,54 @@ public class ArduPilotDriver : IAutopilotDriver
         };
 
         return session;
+    }
+
+    /// <summary>
+    /// Reconnects to the device after bootloader boot.
+    /// Uses USB serial to find the correct MAVLink port.
+    /// </summary>
+    private async Task ReconnectAfterBootAsync(CancellationToken ct)
+    {
+        port.Close();
+
+        var portsAfterBoot = portScanner.GetAvailablePorts();
+        string? targetPort;
+
+        if (!string.IsNullOrWhiteSpace(session!.DeviceSerial))
+        {
+            targetPort = await portScanner.WaitForMavlinkPortAsync(
+                session.DeviceSerial,
+                portsAfterBoot,
+                TimeSpan.FromSeconds(PortSwitchTimeoutSeconds),
+                ct);
+        }
+        else
+        {
+            targetPort = await portScanner.WaitForNewPortAsync(
+                portsAfterBoot,
+                TimeSpan.FromSeconds(PortSwitchTimeoutSeconds),
+                ct);
+        }
+
+        if (string.IsNullOrWhiteSpace(targetPort))
+            targetPort = session.Port;
+
+        port.Open(targetPort, session.BaudRate);
+
+        try
+        {
+            await telemetry.SendHeartbeatAsync(ct);
+            await WaitForDeviceHeartbeatAsync(ct);
+        }
+        catch
+        {
+            // Device might need more time to start MAVLink
+        }
+
+        currentMode = BootMode.Normal;
+        UpdateSessionPortAndState(targetPort, DeviceState.Connected);
+
+        Console.WriteLine($"Reconnected on {targetPort}");
     }
 
     /// <summary>
@@ -229,32 +277,7 @@ public class ArduPilotDriver : IAutopilotDriver
 
             progress.Report((95, "Booting..."));
             await bootloader.BootAsync(ct);
-            port.Close();
-
-            // Wait for device to come back on normal port
-            var portsAfterBoot = portScanner.GetAvailablePorts();
-            var normalPort = await portScanner.WaitForNewPortAsync(
-                portsAfterBoot,
-                TimeSpan.FromSeconds(PortSwitchTimeoutSeconds),
-                ct);
-
-            var targetPort = !string.IsNullOrWhiteSpace(normalPort)
-                ? normalPort
-                : session!.Port;
-
-            try
-            {
-                port.Open(targetPort, session!.BaudRate);
-                await telemetry.SendHeartbeatAsync(ct);
-                await WaitForDeviceHeartbeatAsync(ct);
-            }
-            catch
-            {
-                // Device might take time to boot — session will reconnect on next operation
-            }
-
-            currentMode = BootMode.Normal;
-            UpdateSessionState(DeviceState.Connected);
+            await ReconnectAfterBootAsync(ct);
             progress.Report((100, "Done"));
 
             return new FlashResult
@@ -298,29 +321,8 @@ public class ArduPilotDriver : IAutopilotDriver
             await this.bootloader.ChipEraseAsync(ct);
 
             progress.Report((80, "Booting..."));
-            await this.bootloader.BootAsync(ct);
-            port.Close();
-
-            var portsAfterBoot = portScanner.GetAvailablePorts();
-            var normalPort = await portScanner.WaitForNewPortAsync(
-                portsAfterBoot,
-                TimeSpan.FromSeconds(PortSwitchTimeoutSeconds),
-                ct);
-
-            var targetPort = !string.IsNullOrWhiteSpace(normalPort)
-                ? normalPort
-                : session!.Port;
-
-            try
-            {
-                port.Open(targetPort, session!.BaudRate);
-            }
-            catch
-            {
-                // Will reconnect on next operation
-            }
-            currentMode = BootMode.Normal;
-            UpdateSessionState(DeviceState.Connected);
+            await bootloader.BootAsync(ct);
+            await ReconnectAfterBootAsync(ct);
             progress.Report((100, "Done"));
 
             return new EraseResult { Success = true };
@@ -457,26 +459,9 @@ public class ArduPilotDriver : IAutopilotDriver
                     // Reboot: bootloader → boot → reconnect
                     await RebootAsync(BootMode.Bootloader, ct);
                     await bootloader.BootAsync(ct);
-                    port.Close();
+                    await ReconnectAfterBootAsync(ct);
 
-                    var portsAfterBoot = portScanner.GetAvailablePorts();
-                    var normalPort = await portScanner.WaitForNewPortAsync(
-                        portsAfterBoot,
-                        TimeSpan.FromSeconds(PortSwitchTimeoutSeconds),
-                        ct);
-
-                    var targetPort = !string.IsNullOrWhiteSpace(normalPort)
-                        ? normalPort
-                        : session!.Port;
-
-                    port.Open(targetPort, session!.BaudRate);
-                    await telemetry.SendHeartbeatAsync(ct);
-                    await WaitForDeviceHeartbeatAsync(ct);
-
-                    currentMode = BootMode.Normal;
-                    UpdateSessionPortAndState(targetPort, DeviceState.Connected);
-
-                    Console.WriteLine($"Reconnected on {targetPort}. Refreshing device params...");
+                    Console.WriteLine($"Reconnected. Refreshing device params...");
 
                     // Re-read params after reboot — new params might be available
                     deviceParams = await telemetry.RequestAllParamsAsync(ct);
@@ -558,15 +543,6 @@ public class ArduPilotDriver : IAutopilotDriver
                     TimeSpan.FromSeconds(PortSwitchTimeoutSeconds),
                     ct);
 
-                // If no new port appeared, maybe original port came back
-                if (string.IsNullOrWhiteSpace(newPort))
-                {
-                    await Task.Delay(2000, ct);
-                    var currentPorts =  portScanner.GetAvailablePorts();
-                    if (currentPorts.Contains(session!.Port))
-                        newPort = session.Port;
-                }
-
                 if (string.IsNullOrWhiteSpace(newPort))
                 {
                     throw new DeviceConnectionException("Bootloader port not found.");
@@ -593,40 +569,27 @@ public class ArduPilotDriver : IAutopilotDriver
                 };
             }
 
-            // Normal mode: boot from bootloader, wait for device to reappear
-            await this.bootloader.BootAsync(ct);
-            this.port.Close();
+            // ── Normal mode: boot from bootloader, reconnect to MAVLink port ──
 
-            var portsBeforeNormal = this.portScanner.GetAvailablePorts();
-            var newNormalPort = await this.portScanner.WaitForNewPortAsync(
-                portsBeforeNormal,
-                TimeSpan.FromSeconds(PortSwitchTimeoutSeconds),
-                ct);
-
-            var targetPort = string.IsNullOrWhiteSpace(newNormalPort)
-                ? session!.Port
-                : newNormalPort;
-
-            this.port.Open(targetPort, session!.BaudRate);
+            await bootloader.BootAsync(ct);
 
             try
             {
-                await this.telemetry.SendHeartbeatAsync(ct);
-                await WaitForDeviceHeartbeatAsync(ct);
+                await ReconnectAfterBootAsync(ct);
             }
-            catch
+            catch (Exception ex)
             {
-                this.port.Close();
-                throw;
+                return new BootResult
+                {
+                    Success = false,
+                    ErrorMessage = $"Device booted but reconnection failed: {ex.Message}"
+                };
             }
-
-            this.currentMode = BootMode.Normal;
-            UpdateSessionPortAndState(targetPort, DeviceState.Connected);
 
             return new BootResult
             {
                 Success = true,
-                NewPort = targetPort
+                NewPort = session!.Port
             };
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -662,26 +625,9 @@ public class ArduPilotDriver : IAutopilotDriver
 
         await RebootAsync(BootMode.Bootloader, ct);
         await bootloader.BootAsync(ct);
-        port.Close();
+        await ReconnectAfterBootAsync(ct);
 
-        var portsAfterBoot = portScanner.GetAvailablePorts();
-        var normalPort = await portScanner.WaitForNewPortAsync(
-            portsAfterBoot,
-            TimeSpan.FromSeconds(PortSwitchTimeoutSeconds),
-            ct);
-
-        var targetPort = !string.IsNullOrWhiteSpace(normalPort)
-            ? normalPort
-            : session!.Port;
-
-        port.Open(targetPort, session!.BaudRate);
-        await telemetry.SendHeartbeatAsync(ct);
-        await WaitForDeviceHeartbeatAsync(ct);
-
-        this.currentMode = BootMode.Normal;
-        UpdateSessionPortAndState(targetPort, DeviceState.Connected);
-
-        Console.WriteLine($"Rebooted. Reconnected on {targetPort}");
+        Console.WriteLine($"Rebooted. Parameters applied.");
     }
 
     /// <summary>
