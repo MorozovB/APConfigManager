@@ -43,7 +43,8 @@ public class SessionsControllerTests
             Port = "COM3",
             BaudRate = 115200,
             State = DeviceState.Connected,
-            ConnectedAt = DateTime.UtcNow
+            ConnectedAt = DateTime.UtcNow,
+            DeviceSerial = "AAA111"
         };
 
         controller = new SessionsController(
@@ -221,4 +222,20 @@ public class SessionsControllerTests
                 It.IsAny<CancellationToken>()),
             Times.Once);
     }
+
+    [Fact]
+    public async Task CreateSession_ValidRequest_ResponseContainsDeviceSerial()
+    {
+        mockSessionManager
+            .Setup(s => s.CreateSessionAsync("COM9", 115200, It.IsAny<CancellationToken>()))
+            .Returns(Task.FromResult(session));
+
+        var request = new CreateSessionRequest { Port = "COM9", BaudRate = 115200 };
+        var result = await controller.CreateSession(request, CancellationToken.None);
+
+        var createdResult = result.Result.Should().BeOfType<CreatedResult>().Subject;
+        var response = createdResult.Value.Should().BeOfType<SessionResponse>().Subject;
+        response.DeviceSerial.Should().Be("AAA111");
+    }
+
 }

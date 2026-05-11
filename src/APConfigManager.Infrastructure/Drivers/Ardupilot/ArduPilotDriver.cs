@@ -128,7 +128,8 @@ public class ArduPilotDriver : IAutopilotDriver
             Port = port,
             BaudRate = baudRate,
             State = state,
-            ConnectedAt = DateTime.UtcNow
+            ConnectedAt = DateTime.UtcNow,
+            DeviceSerial = portInfo?.DeviceSerial ?? string.Empty
         };
 
         return session;
