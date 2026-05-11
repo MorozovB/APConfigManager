@@ -14,5 +14,7 @@ namespace APConfigManager.Api.Dto
         public string State { get; set; } = string.Empty;
 
         public DateTime? ConnectedAt { get; set; } = DateTime.UtcNow;
+
+        public string DeviceSerial { get; set; } = string.Empty;
     }
 }

@@ -24,8 +24,8 @@ namespace APConfigManager.Api.Controllers
         [HttpGet]
         public ActionResult<List<PortInfo>> GetPorts()
         {
-            var ports = this.portScanner.GetAvailablePorts();
-            var result = ports.Select(p => new PortInfo { Name = p }).ToList();
+            var ports = this.portScanner.GetAvailablePortsDetailed();
+            var result = ports.Select(p => new PortInfo { Name = p.Name, Description = p.Description }).ToList();
             return Ok(result);
         }
     }

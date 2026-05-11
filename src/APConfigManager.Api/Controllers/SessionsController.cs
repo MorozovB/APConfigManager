@@ -45,7 +45,8 @@ namespace APConfigManager.Api.Controllers
                     Port = session.Port,
                     BaudRate = session.BaudRate,
                     State = session.State.ToString(),
-                    ConnectedAt = session.ConnectedAt
+                    ConnectedAt = session.ConnectedAt,
+                    DeviceSerial = session.DeviceSerial
                 };
 
                 await hubContext.Clients.Group(session.Id.ToString())
@@ -77,7 +78,8 @@ namespace APConfigManager.Api.Controllers
                 Port = session.Port,
                 BaudRate = session.BaudRate,
                 State = session.State.ToString(),
-                ConnectedAt = session.ConnectedAt
+                ConnectedAt = session.ConnectedAt,
+                DeviceSerial = session.DeviceSerial
             }).ToList();
 
             return Ok(response);
@@ -101,7 +103,8 @@ namespace APConfigManager.Api.Controllers
                 Port = session.Port,
                 BaudRate = session.BaudRate,
                 State = session.State.ToString(),
-                ConnectedAt = session.ConnectedAt
+                ConnectedAt = session.ConnectedAt,
+                DeviceSerial = session.DeviceSerial
             };
 
             return Ok(response);
