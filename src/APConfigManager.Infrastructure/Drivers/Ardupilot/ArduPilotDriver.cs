@@ -115,6 +115,7 @@ public class ArduPilotDriver : IAutopilotDriver
         }
 
         var portInfo = this.portScanner.GetPortDescription(port);
+        Console.WriteLine($"ConnectAsync: port={port}, portInfo={portInfo != null}, serial='{portInfo?.DeviceSerial}', desc='{portInfo?.Description}'");
 
         this.currentMode = currentMode;
 
@@ -366,17 +367,16 @@ public class ArduPilotDriver : IAutopilotDriver
 
         var sent = 0;
         var skippedSame = 0;
-        var skippedMissing = 0;
 
         try
         {
-            // Read current parameters from device
             Console.WriteLine("Reading parameters from device...");
             var deviceParams = await telemetry.RequestAllParamsAsync(ct);
-            var deviceMap = deviceParams.ToDictionary(p => p.Name, p => p.Value);
+            var deviceMap = deviceParams
+                 .GroupBy(p => p.Name)
+                 .ToDictionary(g => g.Key, g => g.Last().Value);
             Console.WriteLine($"Device has {deviceMap.Count} parameters");
 
-            // Compare and find differences
             var toUpload = new List<Parameter>();
             var missing = new List<Parameter>();
 
@@ -385,7 +385,6 @@ public class ArduPilotDriver : IAutopilotDriver
                 if (!deviceMap.TryGetValue(param.Name, out var deviceValue))
                 {
                     missing.Add(param);
-                    skippedMissing++;
                     continue;
                 }
 
@@ -398,25 +397,35 @@ public class ArduPilotDriver : IAutopilotDriver
                 toUpload.Add(param);
             }
 
-            Console.WriteLine($"To upload: {toUpload.Count}, already same: {skippedSame}, not on device: {missing.Count}");
+            Console.WriteLine($"To upload: {toUpload.Count}, same: {skippedSame}, missing: {missing.Count}");
 
             if (toUpload.Count == 0 && missing.Count == 0)
             {
+                progress.Report((parameters.Count, parameters.Count));
                 return new ParameterUploadResult
                 {
                     Success = true,
                     Sent = 0,
                     Failed = 0,
+                    Hidden = missing.Count,
                     Total = parameters.Count
                 };
             }
 
-            // Multi-pass upload with reboot between passes
             var pending = new List<Parameter>(toUpload);
+            var previousPendingCount = -1;
 
             for (var pass = 1; pass <= WriteParamsPasses && pending.Count > 0; pass++)
             {
-                Console.WriteLine($"Pass {pass}: sending {pending.Count} parameters");
+                // No progress since last pass — stop wasting time
+                if (pending.Count == previousPendingCount)
+                {
+                    Console.WriteLine($"No progress after pass {pass - 1}, stopping");
+                    break;
+                }
+                previousPendingCount = pending.Count;
+
+                Console.WriteLine($"Pass {pass}: {pending.Count} parameters");
 
                 var failed = new List<Parameter>();
 
@@ -433,47 +442,42 @@ public class ArduPilotDriver : IAutopilotDriver
                     else
                     {
                         failed.Add(param);
-                        Console.WriteLine($"  FAIL: {param.Name} = {param.Value}");
+                        Console.WriteLine($"  FAIL: {param.Name}");
                     }
 
-                    progress.Report((sent + skippedSame + failed.Count + skippedMissing, parameters.Count));
+                    var totalProcessed = parameters.Count - failed.Count -
+                        (pending.Count - failed.Count - (pending.IndexOf(param) + 1));
+                    progress.Report((sent + skippedSame, parameters.Count));
+
                     await Task.Delay(50, ct);
                 }
 
                 pending = failed;
 
-                if (pending.Count == 0)
+                if (pending.Count == 0 && missing.Count == 0)
                     break;
 
-                // Try missing params too — they might appear after reboot
-                if (pass == 1 && missing.Count > 0)
+                // Reboot to apply params (some depend on others)
+                if (pass < WriteParamsPasses && (pending.Count > 0 || (pass == 1 && missing.Count > 0)))
                 {
-                    pending.AddRange(missing);
-                    skippedMissing = 0;
-                    Console.WriteLine($"Added {missing.Count} missing params for retry after reboot");
-                }
+                    Console.WriteLine($"Rebooting to apply parameters...");
 
-                if (pass < WriteParamsPasses)
-                {
-                    Console.WriteLine($"Pass {pass} done. Rebooting to apply parameters...");
-
-                    // Reboot: bootloader → boot → reconnect
-                    await RebootAsync(BootMode.Bootloader, ct);
-                    await bootloader.BootAsync(ct);
+                    await this.telemetry.RebootNormalAsync(ct);
+                    port.Close();
                     await ReconnectAfterBootAsync(ct);
 
-                    Console.WriteLine($"Reconnected. Refreshing device params...");
-
-                    // Re-read params after reboot — new params might be available
+                    // Re-read params after reboot
                     deviceParams = await telemetry.RequestAllParamsAsync(ct);
-                    deviceMap = deviceParams.ToDictionary(p => p.Name, p => p.Value);
+                    deviceMap = deviceParams
+                         .GroupBy(p => p.Name)
+                         .ToDictionary(g => g.Key, g => g.Last().Value);
 
-                    // Re-check pending — some might now match after reboot
+                    // Check if pending params applied after reboot
                     var stillPending = new List<Parameter>();
                     foreach (var param in pending)
                     {
-                        if (deviceMap.TryGetValue(param.Name, out var currentValue)
-                            && Math.Abs(currentValue - param.Value) < 0.001f)
+                        if (deviceMap.TryGetValue(param.Name, out var val)
+                            && Math.Abs(val - param.Value) < 0.001f)
                         {
                             sent++;
                             Console.WriteLine($"  Applied after reboot: {param.Name}");
@@ -483,25 +487,52 @@ public class ArduPilotDriver : IAutopilotDriver
                             stillPending.Add(param);
                         }
                     }
-
                     pending = stillPending;
-                    Console.WriteLine($"After reboot: {pending.Count} still pending");
+
+                    // Check missing — some might now exist after reboot
+                    if (pass == 1 && missing.Count > 0)
+                    {
+                        var nowExists = new List<Parameter>();
+                        var stillMissing = new List<Parameter>();
+
+                        foreach (var param in missing)
+                        {
+                            if (deviceMap.ContainsKey(param.Name))
+                            {
+                                // Check if value already matches
+                                if (Math.Abs(deviceMap[param.Name] - param.Value) < 0.001f)
+                                {
+                                    skippedSame++;
+                                    Console.WriteLine($"  Missing now matches: {param.Name}");
+                                }
+                                else
+                                {
+                                    nowExists.Add(param);
+                                    Console.WriteLine($"  Missing now exists: {param.Name}");
+                                }
+                            }
+                            else
+                            {
+                                stillMissing.Add(param);
+                            }
+                        }
+
+                        missing = stillMissing;
+                        pending.AddRange(nowExists);
+                    }
+
+                    Console.WriteLine($"After reboot: {pending.Count} pending, {missing.Count} missing");
                 }
             }
 
-            // Count remaining missing as skipped
-            skippedMissing = pending.Count(p => !deviceMap.ContainsKey(p.Name));
-            var finalFailed = pending.Count - skippedMissing;
-
-            Console.WriteLine($"Result: sent={sent}, same={skippedSame}, missing={skippedMissing}, failed={finalFailed}");
+            Console.WriteLine($"Done: sent={sent}, same={skippedSame}, missing={missing.Count}, failed={pending.Count}");
 
             return new ParameterUploadResult
             {
                 Success = pending.Count == 0,
                 Sent = sent,
-                Failed = finalFailed,
-                ReadOnly = 0,
-                Hidden = skippedMissing,
+                Failed = pending.Count,
+                Hidden = missing.Count,
                 Total = parameters.Count
             };
         }
@@ -511,7 +542,7 @@ public class ArduPilotDriver : IAutopilotDriver
             {
                 Success = false,
                 Sent = sent,
-                Failed = parameters.Count - sent - skippedSame - skippedMissing,
+                Failed = parameters.Count - sent - skippedSame,
                 Total = parameters.Count,
                 ErrorMessage = ex.Message
             };
@@ -692,7 +723,8 @@ public class ArduPilotDriver : IAutopilotDriver
             Port = session.Port,
             BaudRate = session.BaudRate,
             State = state,
-            ConnectedAt = session.ConnectedAt
+            ConnectedAt = session.ConnectedAt,
+            DeviceSerial = session.DeviceSerial
         };
     }
 
@@ -712,7 +744,8 @@ public class ArduPilotDriver : IAutopilotDriver
             Port = port,
             BaudRate = session.BaudRate,
             State = state,
-            ConnectedAt = session.ConnectedAt
+            ConnectedAt = session.ConnectedAt,
+            DeviceSerial = session.DeviceSerial
         };
     }
 

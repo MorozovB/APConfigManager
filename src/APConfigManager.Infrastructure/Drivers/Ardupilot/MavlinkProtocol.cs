@@ -74,6 +74,13 @@ public class MavLinkProtocol : ITelemetryProtocol
     /// </summary>
     public async Task<List<Parameter>> RequestAllParamsAsync(CancellationToken ct)
     {
+        // Establish GCS presence — autopilot ignores commands without heartbeat stream
+        for (var i = 0; i < 3; i++)
+        {
+            await SendHeartbeatAsync(ct);
+            await Task.Delay(500, ct);
+        }
+
         var request = new mavlink_param_request_list_t
         {
             target_system = 1,
@@ -86,36 +93,69 @@ public class MavLinkProtocol : ITelemetryProtocol
             ArduPilotConstants.MavSysId,
             ArduPilotConstants.MavCompId);
 
-        await port.WriteAsync(packet, 0, packet.Length, ct);
-
+        // Send request, retry up to 3 times if no response
         var parameters = new List<Parameter>();
         var totalExpected = -1;
 
-        while (true)
+        for (var attempt = 1; attempt <= 3; attempt++)
         {
-            var msg = await ReadMessageAsync(ct);
-            if (msg is null)
-                break;
+            await port.WriteAsync(packet, 0, packet.Length, ct);
+            Console.WriteLine($"RequestAllParams: attempt {attempt}, sent PARAM_REQUEST_LIST");
 
-            if (msg.msgid != (uint)MAVLINK_MSG_ID.PARAM_VALUE)
-                continue;
+            var consecutiveNulls = 0;
 
-            var paramValue = (mavlink_param_value_t)msg.data;
-            var name = System.Text.Encoding.ASCII.GetString(paramValue.param_id).TrimEnd('\0');
-
-            parameters.Add(new Parameter
+            while (true)
             {
-                Name = name,
-                Value = paramValue.param_value
-            });
+                ct.ThrowIfCancellationRequested();
 
-            totalExpected = paramValue.param_count;
+                var msg = await ReadMessageAsync(ct);
 
-            if (parameters.Count >= totalExpected)
+                if (msg is null)
+                {
+                    consecutiveNulls++;
+                    var threshold = parameters.Count > 0 ? 3 : 5;
+
+                    if (consecutiveNulls >= threshold)
+                        break;
+
+                    continue;
+                }
+
+                consecutiveNulls = 0;
+
+                if (msg.msgid != (uint)MAVLINK_MSG_ID.PARAM_VALUE)
+                    continue;
+
+                var paramValue = (mavlink_param_value_t)msg.data;
+                var name = System.Text.Encoding.ASCII.GetString(paramValue.param_id).TrimEnd('\0');
+
+                parameters.Add(new Parameter
+                {
+                    Name = name,
+                    Value = paramValue.param_value
+                });
+
+                totalExpected = paramValue.param_count;
+
+                if (parameters.Count >= totalExpected)
+                    break;
+            }
+
+            if (parameters.Count > 0)
                 break;
+
+            Console.WriteLine($"RequestAllParams: attempt {attempt} got 0 params, retrying...");
+            await Task.Delay(1000, ct);
         }
 
-        return parameters;
+        Console.WriteLine($"RequestAllParams: received {parameters.Count}/{totalExpected} parameters");
+
+        var deduplicated = parameters
+            .GroupBy(p => p.Name)
+            .Select(g => g.Last())
+            .ToList();
+
+        return deduplicated;
     }
 
     /// <summary>
@@ -224,6 +264,25 @@ public class MavLinkProtocol : ITelemetryProtocol
         await port.WriteAsync(packet, 0, packet.Length, ct);
 
         await WaitForMessageAsync(MAVLINK_MSG_ID.COMMAND_ACK, 5000, ct);
+    }
+
+    public async Task RebootNormalAsync(CancellationToken ct)
+    {
+        var command = new mavlink_command_long_t
+        {
+            target_system = 1,
+            target_component = 1,
+            command = (ushort)MAV_CMD.PREFLIGHT_REBOOT_SHUTDOWN,
+            param1 = 1  // 1 = normal reboot, NOT bootloader
+        };
+
+        var packet = parser.GenerateMAVLinkPacket10(
+            MAVLINK_MSG_ID.COMMAND_LONG,
+            command,
+            ArduPilotConstants.MavSysId,
+            ArduPilotConstants.MavCompId);
+
+        await port.WriteAsync(packet, 0, packet.Length, ct);
     }
 
     /// <summary>

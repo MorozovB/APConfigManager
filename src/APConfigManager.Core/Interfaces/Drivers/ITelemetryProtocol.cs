@@ -41,5 +41,8 @@ namespace APConfigManager.Core.Interfaces.Drivers
         /// MAVLink CMD 245-reset parameters to defaults.
         /// </summary>
         Task ResetParamsAsync(CancellationToken ct);
+
+
+        Task RebootNormalAsync(CancellationToken ct);
     }
 }
