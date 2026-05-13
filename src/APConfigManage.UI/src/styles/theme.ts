@@ -1,4 +1,4 @@
-import { createDarkTheme, createLightTheme, BrandVariants } from '@fluentui/react-components';
+import { createDarkTheme, BrandVariants } from '@fluentui/react-components';
 
 const brandColors: BrandVariants = {
   10: '#001F2E',
