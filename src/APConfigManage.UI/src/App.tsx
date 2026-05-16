@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { darkTheme } from './styles/theme';
 import { AppHeader } from './components/layout/AppHeader';
 import { SessionList } from './components/sessions/SessionList';
+import { ProfilesPage } from './components/profiles/ProfilesPage';
 
 type TabId = 'config' | 'profiles' | 'tools' | 'settings';
 
@@ -18,11 +19,7 @@ function App() {
       <AppHeader />
 
       <div style={{ padding: '0 16px' }}>
-        <TabList
-          selectedValue={activeTab}
-          onTabSelect={handleTabSelect}
-          size="large"
-        >
+        <TabList selectedValue={activeTab} onTabSelect={handleTabSelect} size="large">
           <Tab value="config">Config</Tab>
           <Tab value="profiles">Profiles</Tab>
           <Tab value="tools">Tools</Tab>
@@ -32,11 +29,7 @@ function App() {
 
       <div style={{ flex: 1, padding: '16px', overflow: 'auto' }}>
         {activeTab === 'config' && <SessionList />}
-        {activeTab === 'profiles' && (
-          <div style={{ color: 'var(--colorNeutralForeground1)' }}>
-            Profiles — управление профилями (Этап 5)
-          </div>
-        )}
+        {activeTab === 'profiles' && <ProfilesPage />}
         {activeTab === 'tools' && (
           <div style={{ color: 'var(--colorNeutralForeground1)' }}>
             Tools — инструменты (Этап 6)
