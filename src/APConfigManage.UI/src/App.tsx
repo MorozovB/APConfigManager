@@ -2,7 +2,7 @@ import { FluentProvider, TabList, Tab, SelectTabEvent, SelectTabData } from '@fl
 import { useState } from 'react';
 import { darkTheme } from './styles/theme';
 import { AppHeader } from './components/layout/AppHeader';
-
+import { SessionList } from './components/sessions/SessionList';
 
 type TabId = 'config' | 'profiles' | 'tools' | 'settings';
 
@@ -15,11 +15,8 @@ function App() {
 
   return (
     <FluentProvider theme={darkTheme} style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
-
-      {/* head */}
       <AppHeader />
 
-      {/* control panel */}
       <div style={{ padding: '0 16px' }}>
         <TabList
           selectedValue={activeTab}
@@ -33,26 +30,24 @@ function App() {
         </TabList>
       </div>
 
-      {/* sections */}
       <div style={{ flex: 1, padding: '16px', overflow: 'auto' }}>
-        {activeTab === 'config' && (
-          <div style={{ color: 'var(--colorNeutralForeground1)' }}>
-          </div>
-        )}
+        {activeTab === 'config' && <SessionList />}
         {activeTab === 'profiles' && (
           <div style={{ color: 'var(--colorNeutralForeground1)' }}>
+            Profiles — управление профилями (Этап 5)
           </div>
         )}
         {activeTab === 'tools' && (
           <div style={{ color: 'var(--colorNeutralForeground1)' }}>
+            Tools — инструменты (Этап 6)
           </div>
         )}
         {activeTab === 'settings' && (
           <div style={{ color: 'var(--colorNeutralForeground1)' }}>
+            Settings — настройки (Этап 6)
           </div>
         )}
       </div>
-
     </FluentProvider>
   );
 }
