@@ -4,6 +4,8 @@ import { darkTheme } from './styles/theme';
 import { AppHeader } from './components/layout/AppHeader';
 import { SessionList } from './components/sessions/SessionList';
 import { ProfilesPage } from './components/profiles/ProfilesPage';
+import { ToolsPage } from './components/tools/ToolsPage';
+import { SettingsPage } from './components/settings/SettingsPage';
 
 type TabId = 'config' | 'profiles' | 'tools' | 'settings';
 
@@ -30,16 +32,8 @@ function App() {
       <div style={{ flex: 1, padding: '16px', overflow: 'auto' }}>
         {activeTab === 'config' && <SessionList />}
         {activeTab === 'profiles' && <ProfilesPage />}
-        {activeTab === 'tools' && (
-          <div style={{ color: 'var(--colorNeutralForeground1)' }}>
-            Tools — инструменты (Этап 6)
-          </div>
-        )}
-        {activeTab === 'settings' && (
-          <div style={{ color: 'var(--colorNeutralForeground1)' }}>
-            Settings — настройки (Этап 6)
-          </div>
-        )}
+        {activeTab === 'tools' && <ToolsPage />}
+        {activeTab === 'settings' && <SettingsPage />}
       </div>
     </FluentProvider>
   );
