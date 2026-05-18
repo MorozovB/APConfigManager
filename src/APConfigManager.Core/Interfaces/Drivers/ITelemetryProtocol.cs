@@ -42,7 +42,14 @@ namespace APConfigManager.Core.Interfaces.Drivers
         /// </summary>
         Task ResetParamsAsync(CancellationToken ct);
 
-
+        /// <summary>
+        /// MAVLink command to reboot the device into normal mode (if supported).
+        /// </summary>
         Task RebootNormalAsync(CancellationToken ct);
+
+        /// <summary>
+        /// MAVLink command to update the bootloader firmware (if supported).
+        /// </summary>
+        Task<bool> FlashBootloaderAsync(CancellationToken ct);
     }
 }

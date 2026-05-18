@@ -286,6 +286,86 @@ public class MavLinkProtocol : ITelemetryProtocol
     }
 
     /// <summary>
+    /// Sends MAV_CMD_FLASH_BOOTLOADER command and waits for ACK.
+    /// Returns true if bootloader was updated successfully.
+    /// </summary>
+    public async Task<bool> FlashBootloaderAsync(CancellationToken ct)
+    {
+        // Establish GCS presence
+        for (var i = 0; i < 3; i++)
+        {
+            await SendHeartbeatAsync(ct);
+            await Task.Delay(500, ct);
+        }
+
+        // Build COMMAND_LONG packet
+        var command = new mavlink_command_long_t
+        {
+            target_system = 1,
+            target_component = 1,
+            command = ArduPilotConstants.MavCmdFlashBootloader,
+            confirmation = 0,
+            param1 = ArduPilotConstants.BootloaderMagicNumber,
+            param2 = 0,
+            param3 = 0,
+            param4 = 0,
+            param5 = 0,
+            param6 = 0,
+            param7 = 0
+        };
+
+        var packet = parser.GenerateMAVLinkPacket10(
+            MAVLINK_MSG_ID.COMMAND_LONG,
+            command,
+            ArduPilotConstants.MavSysId,
+            ArduPilotConstants.MavCompId);
+
+        Console.WriteLine($"FlashBootloader: sending MAV_CMD_FLASH_BOOTLOADER ({ArduPilotConstants.MavCmdFlashBootloader}), param1={ArduPilotConstants.BootloaderMagicNumber}");
+
+        await port.WriteAsync(packet, 0, packet.Length, ct);
+
+        // Wait for COMMAND_ACK — bootloader write takes 5-15 seconds
+        var ackMsg = await WaitForMessageAsync(MAVLINK_MSG_ID.COMMAND_ACK, 30000, ct);
+
+        if (ackMsg is null)
+        {
+            Console.WriteLine("FlashBootloader: no ACK received (timeout 30s)");
+            return false;
+        }
+
+        var ack = (mavlink_command_ack_t)ackMsg.data;
+
+        Console.WriteLine($"FlashBootloader: ACK received, command={ack.command}, result={ack.result}");
+
+        // Check that ACK is for our command
+        if (ack.command != ArduPilotConstants.MavCmdFlashBootloader)
+        {
+            Console.WriteLine($"FlashBootloader: ACK for wrong command ({ack.command}), ignoring");
+            return false;
+        }
+
+        // MAV_RESULT.ACCEPTED = 0
+        if (ack.result == (byte)MAV_RESULT.ACCEPTED)
+        {
+            Console.WriteLine("FlashBootloader: bootloader updated successfully");
+            return true;
+        }
+
+        var resultName = ack.result switch
+        {
+            1 => "TEMPORARILY_REJECTED",
+            2 => "DENIED",
+            3 => "UNSUPPORTED",
+            4 => "FAILED",
+            _ => $"UNKNOWN ({ack.result})"
+        };
+
+        Console.WriteLine($"FlashBootloader: rejected with result={resultName}");
+        return false;
+    }
+
+
+    /// <summary>
     /// Reads and parses a single MAVLink message from the port.
     /// </summary>
     private async Task<MAVLinkMessage?> ReadMessageAsync(CancellationToken ct)

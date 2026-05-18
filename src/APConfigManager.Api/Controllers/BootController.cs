@@ -30,8 +30,8 @@ namespace APConfigManager.Api.Controllers
         /// </summary>
         [HttpPost]
         public async Task<ActionResult<OperationResultResponse>> Boot(
-    Guid sessionId,
-    CancellationToken ct)
+            Guid sessionId,
+            CancellationToken ct)
         {
             var session = sessionManager.GetSession(sessionId);
             if (session is null)
@@ -67,6 +67,54 @@ namespace APConfigManager.Api.Controllers
                 {
                     Success = false,
                     Message = $"Failed to boot device: {ex.Message}"
+                });
+            }
+        }
+
+        /// <summary>
+        /// POST /api/sessions/{sessionId}/boot/update-bootloader — updates the bootloader from running firmware.
+        /// </summary>
+        [HttpPost("update-bootloader")]
+        public async Task<ActionResult<OperationResultResponse>> UpdateBootloader(
+            Guid sessionId,
+            CancellationToken ct)
+        {
+            var session = sessionManager.GetSession(sessionId);
+            if (session is null)
+            {
+                return NotFound(new OperationResultResponse
+                {
+                    Success = false,
+                    Message = "Session not found"
+                });
+            }
+
+            try
+            {
+                var driver = sessionManager.GetDriver(sessionId);
+                var result = await driver.UpdateBootloaderAsync(ct);
+
+                if (result.Success)
+                {
+                    await hubContext.Clients.Group(sessionId.ToString())
+                        .SendAsync("DeviceStateChanged", sessionId.ToString(), "Connected", ct);
+                }
+
+                return Ok(new OperationResultResponse
+                {
+                    Success = result.Success,
+                    Message = result.Success
+                        ? "Bootloader updated successfully"
+                        : result.ErrorMessage,
+                    Data = result
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new OperationResultResponse
+                {
+                    Success = false,
+                    Message = $"Bootloader update failed: {ex.Message}"
                 });
             }
         }

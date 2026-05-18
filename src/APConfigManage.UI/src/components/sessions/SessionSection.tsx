@@ -17,6 +17,7 @@ import { usePorts } from '../../hooks/usePorts';
 import { useDeviceSession } from '../../hooks/useDeviceSession';
 import { useProfiles } from '../../hooks/useProfiles';
 import { useSessionOrchestrator } from '../../hooks/useSessionOrchestrator';
+import { useProfileFiles } from '../../hooks/useProfileFiles';
 import { useMockAccelerometer } from '../device/AccelerometerWidget';
 
 import { PortSelector } from '../common/PortSelector';
@@ -32,24 +33,17 @@ interface Props {
 }
 
 export const SessionSection = ({ index }: Props) => {
-
   const [enabled, setEnabled] = useState(index === 0);
-
   const [selectedPort, setSelectedPort] = useState('');
-
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
-
   const [showLogs, setShowLogs] = useState(false);
-
   const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
-
-  const [firmwareFile, setFirmwareFile] = useState<File | null>(null);
-  const [paramFile, setParamFile] = useState<File | null>(null);
 
   const { ports } = usePorts();
   const session = useDeviceSession();
   const { profiles } = useProfiles();
   const orchestrator = useSessionOrchestrator();
+  const { getFiles } = useProfileFiles();
   const accelData = useMockAccelerometer();
 
   const addLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
@@ -87,31 +81,31 @@ export const SessionSection = ({ index }: Props) => {
       addLog('Select a profile first', 'warn');
       return;
     }
+    const files = getFiles(profile.id);
+
+    if (profile.profileOptions?.firmware && !files.firmwareFile) {
+      addLog('No firmware file in profile. Edit profile and select .apj file.', 'warn');
+      return;
+    }
+    if (profile.profileOptions?.parameters && !files.paramFile) {
+      addLog('No parameter file in profile. Edit profile and select .param file.', 'warn');
+      return;
+    }
+
     addLog(`Starting process with profile "${profile.name}"...`, 'info');
-    await orchestrator.start(session.sessionId, profile, firmwareFile, paramFile);
+    await orchestrator.start(session.sessionId, profile, files.firmwareFile, files.paramFile);
+
     if (orchestrator.error) {
       addLog(`Process failed: ${orchestrator.error}`, 'error');
     } else {
       addLog('Process completed', 'success');
     }
-  }, [session.sessionId, selectedProfileId, profiles, firmwareFile, paramFile, orchestrator, addLog]);
+  }, [session.sessionId, selectedProfileId, profiles, getFiles, orchestrator, addLog]);
 
   const handleStop = useCallback(() => {
     orchestrator.stop();
     addLog('Process stopped', 'warn');
   }, [orchestrator, addLog]);
-
-  const handleFirmwareFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] || null;
-    setFirmwareFile(file);
-    if (file) addLog(`Firmware file: ${file.name}`, 'info');
-  };
-
-  const handleParamFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] || null;
-    setParamFile(file);
-    if (file) addLog(`Param file: ${file.name}`, 'info');
-  };
 
   if (!enabled) {
     return (
@@ -221,83 +215,6 @@ export const SessionSection = ({ index }: Props) => {
             style={{ color: '#d63031', minWidth: '40px' }}
           />
         </Tooltip>
-
-        {/*<label style={{*/}
-        {/*  display: 'flex',*/}
-        {/*  alignItems: 'center',*/}
-        {/*  gap: '4px',*/}
-        {/*  cursor: 'pointer',*/}
-        {/*  fontSize: '12px',*/}
-        {/*  color: 'var(--colorNeutralForeground3)',*/}
-        {/*}}>*/}
-        {/*  <input*/}
-        {/*    type="file"*/}
-        {/*    accept=".apj"*/}
-        {/*    onChange={handleFirmwareFileChange}*/}
-        {/*    style={{ display: 'none' }}*/}
-        {/*  />*/}
-        {/*  <Button as="span" size="small" appearance="outline">*/}
-        {/*    {firmwareFile ? firmwareFile.name : 'Firmware (.apj)'}*/}
-        {/*  </Button>*/}
-        {/*</label>*/}
-
-        <label style={{ cursor: 'pointer' }}>
-          <input
-            type="file"
-            accept=".apj"
-            onChange={handleFirmwareFileChange}
-            style={{ display: 'none' }}
-          />
-          <Button
-            size="small"
-            appearance="outline"
-            onClick={(e) => {
-              // Клик на кнопке → кликаем на скрытый input через label
-              const input = (e.currentTarget as HTMLElement).parentElement?.querySelector('input');
-              input?.click();
-            }}
-          >
-            {firmwareFile ? firmwareFile.name : 'Firmware (.apj)'}
-          </Button>
-        </label>
-
-        {/*<label style={{*/}
-        {/*  display: 'flex',*/}
-        {/*  alignItems: 'center',*/}
-        {/*  gap: '4px',*/}
-        {/*  cursor: 'pointer',*/}
-        {/*  fontSize: '12px',*/}
-        {/*  color: 'var(--colorNeutralForeground3)',*/}
-        {/*}}>*/}
-        {/*  <input*/}
-        {/*    type="file"*/}
-        {/*    accept=".param"*/}
-        {/*    onChange={handleParamFileChange}*/}
-        {/*    style={{ display: 'none' }}*/}
-        {/*  />*/}
-        {/*  <Button as="span" size="small" appearance="outline">*/}
-        {/*    {paramFile ? paramFile.name : 'Params (.param)'}*/}
-        {/*  </Button>*/}
-        {/*</label>*/}
-
-        <label style={{ cursor: 'pointer' }}>
-          <input
-            type="file"
-            accept=".param"
-            onChange={handleParamFileChange}
-            style={{ display: 'none' }}
-          />
-          <Button
-            size="small"
-            appearance="outline"
-            onClick={(e) => {
-              const input = (e.currentTarget as HTMLElement).parentElement?.querySelector('input');
-              input?.click();
-            }}
-          >
-            {paramFile ? paramFile.name : 'Params (.param)'}
-          </Button>
-        </label>
       </div>
 
       <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
@@ -325,6 +242,7 @@ export const SessionSection = ({ index }: Props) => {
         </Button>
         <LogConsole entries={logEntries} visible={showLogs} />
       </div>
+
       {(session.error || orchestrator.error) && (
         <Text size={200} style={{ color: '#ff7675' }}>
           {session.error || orchestrator.error}

@@ -57,6 +57,13 @@ namespace APConfigManager.Core.Interfaces.Drivers
         Task ResetParamsAsync(CancellationToken ct);
 
         /// <summary>
+        /// Updates the bootloader on the device.
+        /// This is typically done when the current bootloader version is incompatible with the firmware being flashed,
+        /// or when a new bootloader version is available that offers improved performance or additional features.
+        /// </summary>
+        Task<BootloaderUpdateResult> UpdateBootloaderAsync(CancellationToken ct);
+
+        /// <summary>
         /// Disconnecting from the device
         /// </summary>
         Task DisconnectAsync();

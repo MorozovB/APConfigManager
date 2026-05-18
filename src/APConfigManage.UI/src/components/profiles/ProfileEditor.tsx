@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogSurface,
@@ -8,21 +8,21 @@ import {
   DialogActions,
   Button,
   Input,
-  Label,
   Checkbox,
   Field,
   Textarea,
+  Text,
 } from '@fluentui/react-components';
 import { DeviceProfile } from '../../types/profile';
+import { useProfileFiles } from '../../hooks/useProfileFiles';
 
 interface Props {
   open: boolean;
-  profile: DeviceProfile | null;   // null = создание нового, объект = редактирование
+  profile: DeviceProfile | null;
   onSave: (profile: DeviceProfile) => void;
   onCancel: () => void;
 }
 
-// Пустой профиль для формы создания
 const emptyProfile: DeviceProfile = {
   id: '',
   name: '',
@@ -37,62 +37,107 @@ const emptyProfile: DeviceProfile = {
   },
 };
 
+interface FormState {
+  data: DeviceProfile;
+  firmwareFileName: string;
+  paramFileName: string;
+}
+
 export const ProfileEditor = ({ open, profile, onSave, onCancel }: Props) => {
-  const [formData, setFormData] = useState<DeviceProfile>(emptyProfile);
+  const [form, setForm] = useState<FormState>({
+    data: { ...emptyProfile },
+    firmwareFileName: '',
+    paramFileName: '',
+  });
 
-  const [firmwareFileName, setFirmwareFileName] = useState('');
-  const [paramFileName, setParamFileName] = useState('');
+  const { setFirmwareFile: storeFirmwareFile, setParamFile: storeParamFile, getFiles } = useProfileFiles();
 
+  const firmwareFileRef = useRef<File | null>(null);
+  const paramFileRef = useRef<File | null>(null);
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
-    if (open) {
-      if (profile) {
-        setFormData({ ...profile });
-        setFirmwareFileName(profile.firmwareFilePath || '');
-        setParamFileName(profile.parameterFilePath || '');
-      } else {
-        setFormData({ ...emptyProfile });
-        setFirmwareFileName('');
-        setParamFileName('');
-      }
+    if (!open) return;
+
+    if (profile) {
+      const files = getFiles(profile.id);
+      firmwareFileRef.current = files.firmwareFile;
+      paramFileRef.current = files.paramFile;
+      setForm({
+        data: { ...profile },
+        firmwareFileName: profile.firmwareFilePath || '',
+        paramFileName: profile.parameterFilePath || '',
+      });
+    } else {
+      firmwareFileRef.current = null;
+      paramFileRef.current = null;
+      setForm({
+        data: { ...emptyProfile },
+        firmwareFileName: '',
+        paramFileName: '',
+      });
     }
-  }, [profile, open]);
+  }, [profile, open, getFiles]);
 
   const handleFieldChange = (field: keyof DeviceProfile, value: string | number) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setForm(prev => ({
+      ...prev,
+      data: { ...prev.data, [field]: value },
+    }));
   };
 
   const handleOptionChange = (option: string, checked: boolean) => {
-    setFormData(prev => ({
+    setForm(prev => ({
       ...prev,
-      profileOptions: { ...prev.profileOptions, [option]: checked },
+      data: {
+        ...prev.data,
+        profileOptions: { ...prev.data.profileOptions, [option]: checked },
+      },
     }));
   };
 
   const handleFirmwareFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setFirmwareFileName(file.name);
-      setFormData(prev => ({ ...prev, firmwareFilePath: file.name }));
+      firmwareFileRef.current = file;
+      setForm(prev => ({
+        ...prev,
+        firmwareFileName: file.name,
+        data: { ...prev.data, firmwareFilePath: file.name },
+      }));
     }
   };
 
   const handleParamFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setParamFileName(file.name);
-      setFormData(prev => ({ ...prev, parameterFilePath: file.name }));
+      paramFileRef.current = file;
+      setForm(prev => ({
+        ...prev,
+        paramFileName: file.name,
+        data: { ...prev.data, parameterFilePath: file.name },
+      }));
     }
   };
 
   const handleSave = () => {
-    const profileToSave: DeviceProfile = {
-      ...formData,
-      id: formData.id || crypto.randomUUID(),
-    };
+    const id = form.data.id || crypto.randomUUID();
+    const profileToSave: DeviceProfile = { ...form.data, id };
+
+    if (firmwareFileRef.current) {
+      storeFirmwareFile(id, firmwareFileRef.current);
+    }
+    if (paramFileRef.current) {
+      storeParamFile(id, paramFileRef.current);
+    }
+
     onSave(profileToSave);
   };
 
-  const isValid = formData.name.trim().length > 0;
+  const isValid = form.data.name.trim().length > 0;
+
+  const showBootloaderWarning =
+    form.data.profileOptions.bootloader && !form.data.profileOptions.firmware;
 
   return (
     <Dialog open={open} onOpenChange={(_e, data) => { if (!data.open) onCancel(); }}>
@@ -107,7 +152,7 @@ export const ProfileEditor = ({ open, profile, onSave, onCancel }: Props) => {
 
               <Field label="Profile name" required>
                 <Input
-                  value={formData.name}
+                  value={form.data.name}
                   onChange={(_e, data) => handleFieldChange('name', data.value)}
                   placeholder="e.g. CubeOrange Copter"
                 />
@@ -115,7 +160,7 @@ export const ProfileEditor = ({ open, profile, onSave, onCancel }: Props) => {
 
               <Field label="Description">
                 <Textarea
-                  value={formData.description}
+                  value={form.data.description}
                   onChange={(_e, data) => handleFieldChange('description', data.value)}
                   placeholder="Optional description"
                   rows={2}
@@ -125,7 +170,7 @@ export const ProfileEditor = ({ open, profile, onSave, onCancel }: Props) => {
               <Field label="Firmware file (.apj)">
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                   <Input
-                    value={firmwareFileName}
+                    value={form.firmwareFileName}
                     readOnly
                     placeholder="No file selected"
                     style={{ flex: 1 }}
@@ -154,7 +199,7 @@ export const ProfileEditor = ({ open, profile, onSave, onCancel }: Props) => {
               <Field label="Parameters file (.param)">
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                   <Input
-                    value={paramFileName}
+                    value={form.paramFileName}
                     readOnly
                     placeholder="No file selected"
                     style={{ flex: 1 }}
@@ -179,22 +224,29 @@ export const ProfileEditor = ({ open, profile, onSave, onCancel }: Props) => {
                   </label>
                 </div>
               </Field>
-              
+
               <Field label="Operations to perform">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '4px' }}>
                   <Checkbox
-                    label="Update bootloader"
-                    checked={formData.profileOptions.bootloader || false}
-                    onChange={(_e, data) => handleOptionChange('bootloader', !!data.checked)}
-                  />
-                  <Checkbox
                     label="Flash firmware"
-                    checked={formData.profileOptions.firmware || false}
+                    checked={form.data.profileOptions.firmware || false}
                     onChange={(_e, data) => handleOptionChange('firmware', !!data.checked)}
                   />
+                  <div>
+                    <Checkbox
+                      label="Update bootloader"
+                      checked={form.data.profileOptions.bootloader || false}
+                      onChange={(_e, data) => handleOptionChange('bootloader', !!data.checked)}
+                    />
+                    {showBootloaderWarning && (
+                      <Text size={200} style={{ color: '#fdcb6e', display: 'block', marginLeft: '28px', marginTop: '2px' }}>
+                        ⚠ Bootloader update requires firmware to be installed on the device.
+                      </Text>
+                    )}
+                  </div>
                   <Checkbox
                     label="Upload parameters"
-                    checked={formData.profileOptions.parameters || false}
+                    checked={form.data.profileOptions.parameters || false}
                     onChange={(_e, data) => handleOptionChange('parameters', !!data.checked)}
                   />
                 </div>

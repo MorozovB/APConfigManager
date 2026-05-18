@@ -70,14 +70,10 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
         /// <summary>Default baud rate for MAVLink communication.</summary>
         public const int MavlinkBaudRate = 115200;
 
-        /// <summary>
-        /// Info request IDs for GET_DEVICE command:
-        /// </summary>
+        /// <summary> Info request IDs for GET_DEVICE command </summary>
         public const byte InfoBoardId = 0x02;
 
-        /// <summary>
-        /// Get board revision
-        /// </summary>
+        /// <summary> Get board revision </summary>
         public const byte InfoBoardRev = 0x03;
 
         /// <summary>
@@ -86,9 +82,18 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
         /// </summary>
         public const byte InfoFlashSize = 0x04;
 
-        /// <summary>
-        /// Represents the revision number of the information block.
-        /// </summary>
+        /// <summary> Represents the revision number of the information block. </summary>
         public const byte InfoBlRev = 0x01;
+
+        /// <summary>
+        /// MAVLink command ID for flashing the bootloader.
+        /// This is a custom command and may not be universally supported across all MAVLink implementations.
+        /// </summary>
+        public const int MavCmdFlashBootloader = 42650;
+
+        /// <summary>
+        /// Magic number used to identify the bootloader firmware file format.
+        /// </summary>
+        public const int BootloaderMagicNumber = 290876;
     }
 }

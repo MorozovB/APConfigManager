@@ -663,6 +663,74 @@ public class ArduPilotDriver : IAutopilotDriver
     }
 
     /// <summary>
+    /// Updates the bootloader from the running firmware.
+    /// Requires the device to be in normal mode with firmware installed.
+    /// </summary>
+    public async Task<BootloaderUpdateResult> UpdateBootloaderAsync(CancellationToken ct)
+    {
+        EnsureConnected();
+
+        try
+        {
+            await EnsureModeAsync(BootMode.Normal, ct);
+        }
+        catch (DeviceConnectionException)
+        {
+            return new BootloaderUpdateResult
+            {
+                Success = false,
+                ErrorMessage = "Device must have firmware installed to update bootloader. Flash firmware first."
+            };
+        }
+
+        try
+        {
+            Console.WriteLine("Updating bootloader...");
+
+            var success = await telemetry.FlashBootloaderAsync(ct);
+
+            if (!success)
+            {
+                return new BootloaderUpdateResult
+                {
+                    Success = false,
+                    ErrorMessage = "Bootloader update failed. Firmware may not support this command (requires ArduPilot 4.0+)."
+                };
+            }
+
+            Console.WriteLine("Bootloader updated. Rebooting to apply...");
+
+            // Wait for the device to finish writing before reboot
+            await Task.Delay(2000, ct);
+
+            await telemetry.RebootNormalAsync(ct);
+            port.Close();
+            await ReconnectAfterBootAsync(ct);
+
+            Console.WriteLine("Bootloader update complete. Reconnected.");
+
+            return new BootloaderUpdateResult
+            {
+                Success = true
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Bootloader update error: {ex.Message}");
+
+            return new BootloaderUpdateResult
+            {
+                Success = false,
+                ErrorMessage = $"Bootloader update error: {ex.Message}"
+            };
+        }
+    }
+
+    /// <summary>
     /// Closes the serial port and releases resources.
     /// Resets the session and mode to initial state.
     /// </summary>
