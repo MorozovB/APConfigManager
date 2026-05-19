@@ -40,6 +40,27 @@ public class DeviceProfileRepositoryTests : IDisposable
     }
 
     [Fact]
+    public void GetById_ExistingProfile_ReturnsProfile()
+    {
+        var profile = CreateProfile();
+        repository.Save(profile);
+
+        var result = repository.GetById(profile.Id);
+
+        result.Should().NotBeNull();
+        result!.Id.Should().Be(profile.Id);
+        result.Name.Should().Be(profile.Name);
+    }
+
+    [Fact]
+    public void GetById_MissingProfile_ReturnsNull()
+    {
+        var result = repository.GetById(Guid.NewGuid());
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void GetAll_EmptyRepository_ReturnsEmptyList()
     {
         var result = repository.GetAll();

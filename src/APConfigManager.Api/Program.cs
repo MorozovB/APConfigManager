@@ -81,6 +81,8 @@ builder.Services.AddSingleton<IFirmwareValidator, FirmwareValidator>();
 //builder.Services.AddSingleton<ISessionManager>(sp =>
 //    new SessionManager(() => sp.GetRequiredService<IAutopilotDriver>()));
 
+builder.Services.AddSingleton<IProfileFileService, ProfileFileService>();
+
 builder.Services.AddScoped<IFlashService, FlashService>();
 builder.Services.AddScoped<IEraseService, EraseService>();
 builder.Services.AddScoped<IParamService, ParamService>();

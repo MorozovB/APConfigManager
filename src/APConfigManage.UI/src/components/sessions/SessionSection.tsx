@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   Switch,
   Button,
@@ -43,13 +43,52 @@ export const SessionSection = ({ index }: Props) => {
   const session = useDeviceSession();
   const { profiles } = useProfiles();
   const orchestrator = useSessionOrchestrator();
-  const { getFiles } = useProfileFiles();
+  const { getFiles, loadFromServer } = useProfileFiles();
+  const [loadingProfileFiles, setLoadingProfileFiles] = useState(false);
   const accelData = useMockAccelerometer();
 
   const addLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
     const timestamp = new Date().toLocaleTimeString();
     setLogEntries(prev => [...prev, { timestamp, message, type }]);
   }, []);
+
+  useEffect(() => {
+    if (!selectedProfileId) {
+      return;
+    }
+
+    const profile = profiles.find(p => p.id === selectedProfileId);
+    if (!profile) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const load = async () => {
+      setLoadingProfileFiles(true);
+      try {
+        await loadFromServer(profile);
+        if (!cancelled) {
+          addLog(`Profile files loaded: "${profile.name}"`, 'success');
+        }
+      } catch (err) {
+        if (!cancelled) {
+          const message = err instanceof Error ? err.message : 'Failed to load profile files';
+          addLog(message, 'error');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingProfileFiles(false);
+        }
+      }
+    };
+
+    load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedProfileId, profiles, loadFromServer, addLog]);
 
   const handleConnect = useCallback(async () => {
     if (!selectedPort) {
@@ -135,7 +174,7 @@ export const SessionSection = ({ index }: Props) => {
     );
   }
 
-  const isBusy = orchestrator.isRunning || session.connecting;
+  const isBusy = orchestrator.isRunning || session.connecting || loadingProfileFiles;
 
   return (
     <div style={{
@@ -201,7 +240,7 @@ export const SessionSection = ({ index }: Props) => {
             appearance="primary"
             icon={<PlayFilled />}
             onClick={handlePlay}
-            disabled={!session.isConnected || !selectedProfileId || isBusy}
+            disabled={!session.isConnected || !selectedProfileId || isBusy || loadingProfileFiles}
             style={{ backgroundColor: '#00b894', borderColor: '#00b894', minWidth: '40px' }}
           />
         </Tooltip>

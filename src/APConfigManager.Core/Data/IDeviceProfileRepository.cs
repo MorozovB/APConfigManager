@@ -14,6 +14,11 @@ namespace APConfigManager.Core.Data
         List<DeviceProfile> GetAll();
 
         /// <summary>
+        /// Find a profile by its identifier.
+        /// </summary>
+        DeviceProfile? GetById(Guid profileId);
+
+        /// <summary>
         /// Find a profile by board type
         /// </summary>
         DeviceProfile? GetByBoardType(uint boardType);

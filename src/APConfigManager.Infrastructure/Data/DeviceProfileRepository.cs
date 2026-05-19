@@ -24,6 +24,14 @@ namespace APConfigManager.Infrastructure.Data
         }
 
         /// <summary>
+        /// Finds a profile by its identifier.
+        /// </summary>
+        public DeviceProfile? GetById(Guid profileId)
+        {
+            return context.DeviceProfiles.FindById(profileId);
+        }
+
+        /// <summary>
         /// Finds a profile matching the given board type.
         /// </summary>
         public DeviceProfile? GetByBoardType(uint boardType)

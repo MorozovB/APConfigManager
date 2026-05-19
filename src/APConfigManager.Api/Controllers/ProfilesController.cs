@@ -1,5 +1,5 @@
-using APConfigManager.Api.Dto;
 using APConfigManager.Core.Data;
+using APConfigManager.Core.Interfaces.Services;
 using APConfigManager.Core.Models.Settings;
 using Microsoft.AspNetCore.Mvc;
 
@@ -13,10 +13,14 @@ namespace APConfigManager.Api.Controllers;
 public class ProfilesController : ControllerBase
 {
     private readonly IDeviceProfileRepository repository;
+    private readonly IProfileFileService profileFileService;
 
-    public ProfilesController(IDeviceProfileRepository repository)
+    public ProfilesController(
+        IDeviceProfileRepository repository,
+        IProfileFileService profileFileService)
     {
         this.repository = repository;
+        this.profileFileService = profileFileService;
     }
 
     [HttpGet]
@@ -32,6 +36,8 @@ public class ProfilesController : ControllerBase
         if (profile is null)
             return BadRequest("Profile is required");
 
+        NormalizeProfilePaths(profile);
+
         repository.Save(profile);
         return Ok();
     }
@@ -41,5 +47,22 @@ public class ProfilesController : ControllerBase
     {
         repository.Delete(id);
         return NoContent();
+    }
+
+    private void NormalizeProfilePaths(DeviceProfile profile)
+    {
+        if (!string.IsNullOrWhiteSpace(profile.FirmwareFilePath))
+        {
+            profile.FirmwareFilePath = profileFileService.ResolveStoredPath(
+                profile.Id,
+                profile.FirmwareFilePath);
+        }
+
+        if (!string.IsNullOrWhiteSpace(profile.ParameterFilePath))
+        {
+            profile.ParameterFilePath = profileFileService.ResolveStoredPath(
+                profile.Id,
+                profile.ParameterFilePath);
+        }
     }
 }
