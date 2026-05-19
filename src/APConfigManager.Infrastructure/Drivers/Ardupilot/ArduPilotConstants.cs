@@ -92,8 +92,8 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
         public const int MavCmdFlashBootloader = 42650;
 
         /// <summary>
-        /// Magic number used to identify the bootloader firmware file format.
+        /// MAV_CMD_FLASH_BOOTLOADER param5 — magic value that authorizes the update (see ArduPilot docs).
         /// </summary>
-        public const int BootloaderMagicNumber = 290876;
+        public const float BootloaderMagicNumber = 290876f;
     }
 }

@@ -305,11 +305,11 @@ public class MavLinkProtocol : ITelemetryProtocol
             target_component = 1,
             command = ArduPilotConstants.MavCmdFlashBootloader,
             confirmation = 0,
-            param1 = ArduPilotConstants.BootloaderMagicNumber,
+            param1 = 0,
             param2 = 0,
             param3 = 0,
             param4 = 0,
-            param5 = 0,
+            param5 = ArduPilotConstants.BootloaderMagicNumber,
             param6 = 0,
             param7 = 0
         };
@@ -320,7 +320,7 @@ public class MavLinkProtocol : ITelemetryProtocol
             ArduPilotConstants.MavSysId,
             ArduPilotConstants.MavCompId);
 
-        Console.WriteLine($"FlashBootloader: sending MAV_CMD_FLASH_BOOTLOADER ({ArduPilotConstants.MavCmdFlashBootloader}), param1={ArduPilotConstants.BootloaderMagicNumber}");
+        Console.WriteLine($"FlashBootloader: sending MAV_CMD_FLASH_BOOTLOADER ({ArduPilotConstants.MavCmdFlashBootloader}), param5={ArduPilotConstants.BootloaderMagicNumber}");
 
         await port.WriteAsync(packet, 0, packet.Length, ct);
 

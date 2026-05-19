@@ -694,7 +694,8 @@ public class ArduPilotDriver : IAutopilotDriver
                 return new BootloaderUpdateResult
                 {
                     Success = false,
-                    ErrorMessage = "Bootloader update failed. Firmware may not support this command (requires ArduPilot 4.0+)."
+                    ErrorMessage = "Bootloader update failed (no ACK or command rejected). " +
+                                   "Check API console for MAV_RESULT. Device must be in normal flight mode with ArduPilot 4.0+."
                 };
             }
 
