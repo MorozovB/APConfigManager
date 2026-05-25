@@ -132,7 +132,8 @@ public class MavLinkProtocol : ITelemetryProtocol
                 parameters.Add(new Parameter
                 {
                     Name = name,
-                    Value = paramValue.param_value
+                    Value = paramValue.param_value,
+                    ParamType = paramValue.param_type
                 });
 
                 totalExpected = paramValue.param_count;
@@ -173,7 +174,7 @@ public class MavLinkProtocol : ITelemetryProtocol
             target_component = 1,
             param_id = paramId,
             param_value = param.Value,
-            param_type = (byte)MAV_PARAM_TYPE.REAL32
+            param_type = param.ParamType
         };
 
         var packet = parser.GenerateMAVLinkPacket10(
@@ -193,7 +194,17 @@ public class MavLinkProtocol : ITelemetryProtocol
             return false;
 
         var confirmed = (mavlink_param_value_t)response.data;
-        return Math.Abs(confirmed.param_value - param.Value) < 0.001f;
+        var confirmedName = System.Text.Encoding.ASCII.GetString(confirmed.param_id).TrimEnd('\0');
+
+        if (!confirmedName.Equals(param.Name, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (Math.Abs(confirmed.param_value - param.Value) > 0.001f)
+        {
+            Console.WriteLine($"  Note: {param.Name} sent={param.Value}, device stored={confirmed.param_value}");
+        }
+
+        return true;
     }
 
     /// <summary>

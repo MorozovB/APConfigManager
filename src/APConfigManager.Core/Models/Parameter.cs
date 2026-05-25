@@ -8,5 +8,7 @@ namespace APConfigManager.Core.Models
         public string Name { get; init; } = string.Empty;
 
         public float Value { get; init; }
+
+        public byte ParamType { get; init; } = 9; // MAV_PARAM_TYPE_REAL32
     }
 }
