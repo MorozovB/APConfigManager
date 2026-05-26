@@ -32,5 +32,10 @@ namespace APConfigManager.Core.Interfaces.Services
         /// Get the driver associated with the session.
         /// </summary>
         IAutopilotDriver GetDriver(Guid sessionId);
+
+        /// <summary>
+        /// Updates the stored session from the driver's current connection state.
+        /// </summary>
+        void SyncSessionFromDriver(Guid sessionId);
     }
 }

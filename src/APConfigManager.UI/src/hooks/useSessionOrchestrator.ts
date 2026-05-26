@@ -32,7 +32,8 @@ export const useSessionOrchestrator = () => {
     sessionId: string,
     profile: DeviceProfile,
     firmwareFile: File | null,
-    paramFile: File | null
+    paramFile: File | null,
+    refreshSession: () => Promise<void>
   ) => {
     setIsRunning(true);
     setError(null);
@@ -58,6 +59,7 @@ export const useSessionOrchestrator = () => {
           throw new Error(msg);
         }
         addResult({ stage: 'flashing', success: true, message: 'Firmware flashed successfully' });
+        await refreshSession();
       }
 
       if (profile.profileOptions?.bootloader) {
@@ -69,6 +71,7 @@ export const useSessionOrchestrator = () => {
           throw new Error(msg);
         }
         addResult({ stage: 'bootloader', success: true, message: 'Bootloader updated successfully' });
+        await refreshSession();
       }
 
       if (profile.profileOptions?.parameters && paramFile) {
@@ -80,6 +83,7 @@ export const useSessionOrchestrator = () => {
           throw new Error(msg);
         }
         addResult({ stage: 'params', success: true, message: 'Parameters uploaded' });
+        await refreshSession();
       }
 
       setStage('done');

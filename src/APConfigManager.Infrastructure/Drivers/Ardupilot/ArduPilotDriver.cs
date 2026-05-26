@@ -813,6 +813,9 @@ public class ArduPilotDriver : IAutopilotDriver
         return Task.CompletedTask;
     }
 
+    /// <inheritdoc />
+    public DeviceSession? GetCurrentSession() => session;
+
     /// <summary>
     /// Throws SessionException if no active session or port is closed.
     /// </summary>

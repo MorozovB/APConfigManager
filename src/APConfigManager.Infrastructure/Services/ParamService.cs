@@ -43,7 +43,14 @@ public class ParamService : IParamService
         var driver = sessionManager.GetDriver(sessionId);
         var parameters = paramParser.Parse(stream);
 
-        return await driver.WriteParamsAsync(parameters, progress, ct);
+        var result = await driver.WriteParamsAsync(parameters, progress, ct);
+
+        if (result.Success)
+        {
+            sessionManager.SyncSessionFromDriver(sessionId);
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -73,5 +80,6 @@ public class ParamService : IParamService
 
         var driver = sessionManager.GetDriver(sessionId);
         await driver.ResetParamsAsync(ct);
+        sessionManager.SyncSessionFromDriver(sessionId);
     }
 }

@@ -41,6 +41,12 @@ public class EraseController : ControllerBase
 
             var result = await eraseService.EraseAsync(sessionId, progress, ct);
 
+            if (result.Success)
+            {
+                await hubContext.Clients.Group(sessionId.ToString())
+                    .SendAsync("DeviceStateChanged", sessionId.ToString(), "Connected", ct);
+            }
+
             await hubContext.Clients.Group(sessionId.ToString())
                 .SendAsync("OperationCompleted", sessionId.ToString(), result, ct);
 

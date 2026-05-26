@@ -50,6 +50,7 @@ namespace APConfigManager.Api.Controllers
 
                 if (result.Success)
                 {
+                    sessionManager.SyncSessionFromDriver(sessionId);
                     await hubContext.Clients.Group(sessionId.ToString())
                         .SendAsync("DeviceStateChanged", sessionId.ToString(), "Connected", ct);
                 }
@@ -96,6 +97,7 @@ namespace APConfigManager.Api.Controllers
 
                 if (result.Success)
                 {
+                    sessionManager.SyncSessionFromDriver(sessionId);
                     await hubContext.Clients.Group(sessionId.ToString())
                         .SendAsync("DeviceStateChanged", sessionId.ToString(), "Connected", ct);
                 }

@@ -31,7 +31,14 @@ namespace APConfigManager.Infrastructure.Services
 
             var driver = sessionManager.GetDriver(sessionId);
 
-            return await driver.EraseAsync(progress, ct);
+            var result = await driver.EraseAsync(progress, ct);
+
+            if (result.Success)
+            {
+                sessionManager.SyncSessionFromDriver(sessionId);
+            }
+
+            return result;
         }
     }
 }

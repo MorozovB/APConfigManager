@@ -50,6 +50,12 @@ public class FlashController : ControllerBase
 
             var result = await flashService.FlashAsync(sessionId, stream, progress, ct);
 
+            if (result.Success)
+            {
+                await hubContext.Clients.Group(sessionId.ToString())
+                    .SendAsync("DeviceStateChanged", sessionId.ToString(), "Connected", ct);
+            }
+
             await hubContext.Clients.Group(sessionId.ToString())
                 .SendAsync("OperationCompleted", sessionId.ToString(), result, ct);
 

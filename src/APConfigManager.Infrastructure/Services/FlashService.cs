@@ -157,6 +157,13 @@ public class FlashService : IFlashService
             progress.Report((scaled, p.message));
         });
 
-        return await driver.FlashAsync(firmware, flashProgress, ct);
+        var result = await driver.FlashAsync(firmware, flashProgress, ct);
+
+        if (result.Success)
+        {
+            sessionManager.SyncSessionFromDriver(sessionId);
+        }
+
+        return result;
     }
 }

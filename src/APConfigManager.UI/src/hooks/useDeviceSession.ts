@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { DeviceSession, DeviceState } from '../types/session';
-import { createSession, closeSession } from '../api/sessionsApi';
+import { createSession, closeSession, getSession } from '../api/sessionsApi';
 import {
   createHubConnection,
   startConnection,
@@ -32,7 +32,28 @@ export const useDeviceSession = () => {
   const [error, setError] = useState<string | null>(null);
 
   const connectionRef = useRef<HubConnection | null>(null);
+  const dataRef = useRef<DeviceSession | null>(null);
 
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
+
+  const refreshSession = useCallback(async () => {
+    const sessionId = dataRef.current?.id;
+    if (!sessionId) return;
+    try {
+      const updated = await getSession(sessionId);
+      setData(updated);
+      setDeviceState(updated.state as DeviceState);
+    } catch (err) {
+      console.error('Failed to refresh session:', err);
+    }
+  }, []);
+
+  const refreshSessionRef = useRef(refreshSession);
+  useEffect(() => {
+    refreshSessionRef.current = refreshSession;
+  }, [refreshSession]);
 
   useEffect(() => {
     const connection = createHubConnection();
@@ -50,7 +71,10 @@ export const useDeviceSession = () => {
         setProgress({ percent, message: `${current}/${total}` });
       },
       onStateChanged: (_sessionId, state) => {
-        setDeviceState(state as DeviceState);
+        const nextState = state as DeviceState;
+        setDeviceState(nextState);
+        setData(prev => (prev ? { ...prev, state: nextState } : prev));
+        void refreshSessionRef.current();
       },
       onOperationCompleted: (_sessionId, result) => {
         setLastResult(result);
@@ -131,5 +155,6 @@ export const useDeviceSession = () => {
     connect,
     disconnect,
     resetProgress,
+    refreshSession,
   };
 };

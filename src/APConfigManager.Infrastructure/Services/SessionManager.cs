@@ -130,6 +130,23 @@ public class SessionManager : ISessionManager, IAsyncDisposable
         return driver;
     }
 
+    /// <inheritdoc />
+    public void SyncSessionFromDriver(Guid sessionId)
+    {
+        if (!drivers.TryGetValue(sessionId, out var driver))
+        {
+            return;
+        }
+
+        var current = driver.GetCurrentSession();
+        if (current is null)
+        {
+            return;
+        }
+
+        sessions[sessionId] = current;
+    }
+
     /// <summary>
     /// Closes all active sessions and releases resources.
     /// </summary>

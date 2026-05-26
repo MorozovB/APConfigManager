@@ -67,5 +67,10 @@ namespace APConfigManager.Core.Interfaces.Drivers
         /// Disconnecting from the device
         /// </summary>
         Task DisconnectAsync();
+
+        /// <summary>
+        /// Returns the current session state (port, mode) held by the driver.
+        /// </summary>
+        DeviceSession? GetCurrentSession();
     }
 }

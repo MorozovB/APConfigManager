@@ -90,6 +90,12 @@ export const SessionSection = ({ index }: Props) => {
     };
   }, [selectedProfileId, profiles, loadFromServer, addLog]);
 
+  useEffect(() => {
+    if (session.isConnected && session.data?.port) {
+      setSelectedPort(session.data.port);
+    }
+  }, [session.isConnected, session.data?.port]);
+
   const handleConnect = useCallback(async () => {
     if (!selectedPort) {
       addLog('Select a port first', 'warn');
@@ -132,7 +138,7 @@ export const SessionSection = ({ index }: Props) => {
     }
 
     addLog(`Starting process with profile "${profile.name}"...`, 'info');
-    await orchestrator.start(session.sessionId, profile, files.firmwareFile, files.paramFile);
+    await orchestrator.start(session.sessionId, profile, files.firmwareFile, files.paramFile, session.refreshSession);
 
     if (orchestrator.error) {
       addLog(`Process failed: ${orchestrator.error}`, 'error');
