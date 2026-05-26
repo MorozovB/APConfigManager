@@ -50,6 +50,16 @@ export const useDeviceSession = () => {
     }
   }, []);
 
+  const [logEntries, setLogEntries] = useState<string[]>([]);
+
+  const addLogEntry = useCallback((message: string) => {
+    setLogEntries(prev => [...prev, message]);
+  }, []);
+
+  const clearLog = useCallback(() => {
+    setLogEntries([]);
+  }, []);
+
   const refreshSessionRef = useRef(refreshSession);
   useEffect(() => {
     refreshSessionRef.current = refreshSession;
@@ -61,14 +71,17 @@ export const useDeviceSession = () => {
 
     registerHandlers(connection, {
       onFlashProgress: (percent, message) => {
-        setProgress({ percent, message });
+        setProgress({ percent, message: 'Flashing' });
+        if (message) addLogEntry(message);
       },
       onEraseProgress: (percent, message) => {
-        setProgress({ percent, message });
+        setProgress({ percent, message: 'Erasing' });
+        if (message) addLogEntry(message);
       },
       onParamProgress: (current, total) => {
         const percent = total > 0 ? Math.round((100 * current) / total) : 0;
-        setProgress({ percent, message: `${current}/${total}` });
+        setProgress({ percent, message: 'Uploading parameters' });
+        addLogEntry(`${current}/${total}`);
       },
       onStateChanged: (_sessionId, state) => {
         const nextState = state as DeviceState;
@@ -156,5 +169,7 @@ export const useDeviceSession = () => {
     disconnect,
     resetProgress,
     refreshSession,
+    logEntries,
+    clearLog,
   };
 };

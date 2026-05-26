@@ -53,6 +53,12 @@ export const SessionSection = ({ index }: Props) => {
   }, []);
 
   useEffect(() => {
+    if (session.logEntries.length === 0) return;
+    const latest = session.logEntries[session.logEntries.length - 1];
+    addLog(latest, 'progress');
+  }, [session.logEntries.length, session.logEntries, addLog]);
+
+  useEffect(() => {
     if (!selectedProfileId) {
       return;
     }
@@ -138,7 +144,14 @@ export const SessionSection = ({ index }: Props) => {
     }
 
     addLog(`Starting process with profile "${profile.name}"...`, 'info');
-    await orchestrator.start(session.sessionId, profile, files.firmwareFile, files.paramFile, session.refreshSession);
+    await orchestrator.start(
+      session.sessionId,
+      profile,
+      files.firmwareFile,
+      files.paramFile,
+      session.refreshSession,
+      session.resetProgress
+    )
 
     if (orchestrator.error) {
       addLog(`Process failed: ${orchestrator.error}`, 'error');
@@ -264,15 +277,63 @@ export const SessionSection = ({ index }: Props) => {
 
       <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
         <div style={{ flex: 1 }}>
+          {orchestrator.stage === 'done' && orchestrator.results.length > 0 && (
+            <div style={{
+              display: 'flex',
+              gap: '16px',
+              flexWrap: 'wrap',
+              padding: '4px 0',
+            }}>
+              {orchestrator.results
+                .filter(r => r.stage !== 'done')
+                .map((r, i) => (
+                  <Text
+                    key={i}
+                    size={200}
+                    weight="semibold"
+                    style={{
+                      color: r.success ? '#00b894' : '#ff7675',
+                    }}
+                  >
+                    {r.stage === 'flashing' && (r.success ? 'Firmware — Done ✓' : 'Firmware — Failed ✗')}
+                    {r.stage === 'bootloader' && (r.success ? 'Bootloader — Done ✓' : 'Bootloader — Failed ✗')}
+                    {r.stage === 'params' && (r.success ? 'Parameters — Done ✓' : 'Parameters — Failed ✗')}
+                  </Text>
+                ))}
+            </div>
+          )}
+          {orchestrator.stage === 'error' && orchestrator.results.length > 0 && (
+            <div style={{
+              display: 'flex',
+              gap: '16px',
+              flexWrap: 'wrap',
+              padding: '4px 0',
+            }}>
+              {orchestrator.results
+                .filter(r => r.stage !== 'done')
+                .map((r, i) => (
+                  <Text
+                    key={i}
+                    size={200}
+                    weight="semibold"
+                    style={{
+                      color: r.success ? '#00b894' : '#ff7675',
+                    }}
+                  >
+                    {r.stage === 'flashing' && (r.success ? 'Firmware — Done ✓' : 'Firmware — Failed ✗')}
+                    {r.stage === 'bootloader' && (r.success ? 'Bootloader — Done ✓' : 'Bootloader — Failed ✗')}
+                    {r.stage === 'params' && (r.success ? 'Parameters — Done ✓' : 'Parameters — Failed ✗')}
+                  </Text>
+                ))}
+            </div>
+          )}
           <ProgressBar
             percent={session.progress.percent}
             message={session.progress.message || orchestrator.stage}
-            visible={session.isConnected}
+            visible={session.isConnected && orchestrator.stage !== 'done' && orchestrator.stage !== 'idle'}
           />
         </div>
-
         <AltitudeDisplay altitude={session.isConnected ? 0 : null} />
-
         <AccelerometerWidget data={session.isConnected ? accelData : []} />
       </div>
 

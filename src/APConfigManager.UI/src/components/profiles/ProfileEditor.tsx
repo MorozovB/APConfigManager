@@ -159,9 +159,12 @@ export const ProfileEditor = ({
     const profileToSave: DeviceProfile = {
       ...form,
       id,
+      description: form.description || '',
       firmwareFilePath: form.firmwareFilePath?.trim() || null,
       parameterFilePath: form.parameterFilePath?.trim() || null,
     };
+
+    console.log('ProfileEditor save:', JSON.stringify(profileToSave, null, 2));
 
     onSave(profileToSave);
   };

@@ -38,6 +38,8 @@ public class ProfilesController : ControllerBase
 
         NormalizeProfilePaths(profile);
 
+        Console.WriteLine($"Save profile: Id={profile.Id}, Name={profile.Name}");
+
         repository.Save(profile);
         return Ok();
     }

@@ -33,24 +33,16 @@ export const useSessionOrchestrator = () => {
     profile: DeviceProfile,
     firmwareFile: File | null,
     paramFile: File | null,
-    refreshSession: () => Promise<void>
+    refreshSession: () => Promise<void>,
+    resetProgress: () => void
   ) => {
     setIsRunning(true);
     setError(null);
     setResults([]);
 
-    console.log('Orchestrator start:', {
-      sessionId,
-      profileName: profile.name,
-      options: profile.profileOptions,
-      hasFirmwareFile: firmwareFile !== null,
-      firmwareFileName: firmwareFile?.name,
-      hasParamFile: paramFile !== null,
-      paramFileName: paramFile?.name,
-    });
-
     try {
       if (profile.profileOptions?.firmware && firmwareFile) {
+        resetProgress();
         setStage('flashing');
         const flashResult = await startFlash(sessionId, firmwareFile);
         if (!flashResult.success) {
@@ -63,6 +55,7 @@ export const useSessionOrchestrator = () => {
       }
 
       if (profile.profileOptions?.bootloader) {
+        resetProgress();
         setStage('bootloader');
         const blResult = await updateBootloader(sessionId);
         if (!blResult.success) {
@@ -75,6 +68,7 @@ export const useSessionOrchestrator = () => {
       }
 
       if (profile.profileOptions?.parameters && paramFile) {
+        resetProgress();
         setStage('params');
         const paramResult = await uploadParams(sessionId, paramFile);
         if (!paramResult.success) {
@@ -88,6 +82,7 @@ export const useSessionOrchestrator = () => {
 
       setStage('done');
       addResult({ stage: 'done', success: true, message: 'All operations completed' });
+      resetProgress();
     } catch (err) {
       setStage('error');
       setError(err instanceof Error ? err.message : 'Process failed');
