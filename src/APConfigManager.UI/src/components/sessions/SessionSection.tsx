@@ -25,6 +25,7 @@ import { ProfileSelector } from '../common/ProfileSelector';
 import { ProgressBar } from '../common/ProgressBar';
 import { LogConsole, LogEntry } from '../common/LogConsole';
 import { DeviceStatusBadge } from '../device/DeviceStatusBadge';
+import { DeviceInfoPanel } from '../device/DeviceInfoPanel';
 import { AltitudeDisplay } from '../device/AltitudeDisplay';
 import { AccelerometerWidget } from '../device/AccelerometerWidget';
 
@@ -38,13 +39,14 @@ export const SessionSection = ({ index }: Props) => {
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [showLogs, setShowLogs] = useState(false);
   const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
+  const [blRevBefore, setBlRevBefore] = useState<number>(0);
+  const [loadingProfileFiles, setLoadingProfileFiles] = useState(false);
 
   const { ports } = usePorts();
   const session = useDeviceSession();
   const { profiles } = useProfiles();
   const orchestrator = useSessionOrchestrator();
   const { getFiles, loadFromServer } = useProfileFiles();
-  const [loadingProfileFiles, setLoadingProfileFiles] = useState(false);
   const accelData = useMockAccelerometer();
 
   const addLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
@@ -53,20 +55,9 @@ export const SessionSection = ({ index }: Props) => {
   }, []);
 
   useEffect(() => {
-    if (session.logEntries.length === 0) return;
-    const latest = session.logEntries[session.logEntries.length - 1];
-    addLog(latest, 'progress');
-  }, [session.logEntries.length, session.logEntries, addLog]);
-
-  useEffect(() => {
-    if (!selectedProfileId) {
-      return;
-    }
-
+    if (!selectedProfileId) return;
     const profile = profiles.find(p => p.id === selectedProfileId);
-    if (!profile) {
-      return;
-    }
+    if (!profile) return;
 
     let cancelled = false;
 
@@ -97,10 +88,10 @@ export const SessionSection = ({ index }: Props) => {
   }, [selectedProfileId, profiles, loadFromServer, addLog]);
 
   useEffect(() => {
-    if (session.isConnected && session.data?.port) {
-      setSelectedPort(session.data.port);
-    }
-  }, [session.isConnected, session.data?.port]);
+    if (session.logEntries.length === 0) return;
+    const latest = session.logEntries[session.logEntries.length - 1];
+    addLog(latest, 'progress');
+  }, [session.logEntries.length, session.logEntries, addLog]);
 
   const handleConnect = useCallback(async () => {
     if (!selectedPort) {
@@ -132,6 +123,7 @@ export const SessionSection = ({ index }: Props) => {
       addLog('Select a profile first', 'warn');
       return;
     }
+
     const files = getFiles(profile.id);
 
     if (profile.profileOptions?.firmware && !files.firmwareFile) {
@@ -143,6 +135,8 @@ export const SessionSection = ({ index }: Props) => {
       return;
     }
 
+    setBlRevBefore(session.data?.bootloaderRevision || 0);
+
     addLog(`Starting process with profile "${profile.name}"...`, 'info');
     await orchestrator.start(
       session.sessionId,
@@ -151,14 +145,14 @@ export const SessionSection = ({ index }: Props) => {
       files.paramFile,
       session.refreshSession,
       session.resetProgress
-    )
+    );
 
     if (orchestrator.error) {
       addLog(`Process failed: ${orchestrator.error}`, 'error');
     } else {
       addLog('Process completed', 'success');
     }
-  }, [session.sessionId, selectedProfileId, profiles, getFiles, orchestrator, addLog]);
+  }, [session.sessionId, session.data, selectedProfileId, profiles, getFiles, orchestrator, addLog, session.refreshSession, session.resetProgress]);
 
   const handleStop = useCallback(() => {
     orchestrator.stop();
@@ -194,6 +188,8 @@ export const SessionSection = ({ index }: Props) => {
   }
 
   const isBusy = orchestrator.isRunning || session.connecting || loadingProfileFiles;
+  const showCompletedResults = (orchestrator.stage === 'done' || orchestrator.stage === 'error')
+    && orchestrator.results.length > 0;
 
   return (
     <div style={{
@@ -216,14 +212,12 @@ export const SessionSection = ({ index }: Props) => {
             setEnabled(data.checked);
           }}
         />
-
         <PortSelector
           ports={ports}
           selectedPort={selectedPort}
           onSelect={setSelectedPort}
           disabled={session.isConnected || isBusy}
         />
-
         <Button
           appearance="primary"
           icon={<PlugConnectedRegular />}
@@ -232,7 +226,6 @@ export const SessionSection = ({ index }: Props) => {
         >
           Connect
         </Button>
-
         <Button
           appearance="subtle"
           icon={<PlugDisconnectedRegular />}
@@ -242,9 +235,10 @@ export const SessionSection = ({ index }: Props) => {
         >
           Disconnect
         </Button>
-
         <DeviceStatusBadge state={session.deviceState} />
       </div>
+
+      <DeviceInfoPanel session={session.data} visible={session.isConnected} />
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
         <ProfileSelector
@@ -253,7 +247,6 @@ export const SessionSection = ({ index }: Props) => {
           onSelect={setSelectedProfileId}
           disabled={isBusy}
         />
-
         <Tooltip content="Start process" relationship="label">
           <Button
             appearance="primary"
@@ -263,7 +256,6 @@ export const SessionSection = ({ index }: Props) => {
             style={{ backgroundColor: '#00b894', borderColor: '#00b894', minWidth: '40px' }}
           />
         </Tooltip>
-
         <Tooltip content="Stop process" relationship="label">
           <Button
             appearance="subtle"
@@ -277,7 +269,7 @@ export const SessionSection = ({ index }: Props) => {
 
       <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
         <div style={{ flex: 1 }}>
-          {orchestrator.stage === 'done' && orchestrator.results.length > 0 && (
+          {showCompletedResults && (
             <div style={{
               display: 'flex',
               gap: '16px',
@@ -286,51 +278,49 @@ export const SessionSection = ({ index }: Props) => {
             }}>
               {orchestrator.results
                 .filter(r => r.stage !== 'done')
-                .map((r, i) => (
-                  <Text
-                    key={i}
-                    size={200}
-                    weight="semibold"
-                    style={{
-                      color: r.success ? '#00b894' : '#ff7675',
-                    }}
-                  >
-                    {r.stage === 'flashing' && (r.success ? 'Firmware — Done ✓' : 'Firmware — Failed ✗')}
-                    {r.stage === 'bootloader' && (r.success ? 'Bootloader — Done ✓' : 'Bootloader — Failed ✗')}
-                    {r.stage === 'params' && (r.success ? 'Parameters — Done ✓' : 'Parameters — Failed ✗')}
-                  </Text>
-                ))}
-            </div>
-          )}
-          {orchestrator.stage === 'error' && orchestrator.results.length > 0 && (
-            <div style={{
-              display: 'flex',
-              gap: '16px',
-              flexWrap: 'wrap',
-              padding: '4px 0',
-            }}>
-              {orchestrator.results
-                .filter(r => r.stage !== 'done')
-                .map((r, i) => (
-                  <Text
-                    key={i}
-                    size={200}
-                    weight="semibold"
-                    style={{
-                      color: r.success ? '#00b894' : '#ff7675',
-                    }}
-                  >
-                    {r.stage === 'flashing' && (r.success ? 'Firmware — Done ✓' : 'Firmware — Failed ✗')}
-                    {r.stage === 'bootloader' && (r.success ? 'Bootloader — Done ✓' : 'Bootloader — Failed ✗')}
-                    {r.stage === 'params' && (r.success ? 'Parameters — Done ✓' : 'Parameters — Failed ✗')}
-                  </Text>
-                ))}
+                .map((r, i) => {
+                  if (r.stage === 'flashing') {
+                    return (
+                      <Text key={i} size={200} weight="semibold"
+                            style={{ color: r.success ? '#00b894' : '#ff7675' }}>
+                        {r.success ? 'Firmware — Done ✓' : 'Firmware — Failed ✗'}
+                      </Text>
+                    );
+                  }
+                  if (r.stage === 'bootloader') {
+                    if (r.success) {
+                      const blAfter = session.data?.bootloaderRevision || 0;
+                      const revInfo = blRevBefore > 0 && blAfter > 0
+                        ? ` (rev ${blRevBefore} → ${blAfter})`
+                        : '';
+                      return (
+                        <Text key={i} size={200} weight="semibold" style={{ color: '#00b894' }}>
+                          Bootloader — Done ✓{revInfo}
+                        </Text>
+                      );
+                    }
+                    return (
+                      <Text key={i} size={200} weight="semibold" style={{ color: '#ff7675' }}>
+                        Bootloader — Failed ✗
+                      </Text>
+                    );
+                  }
+                  if (r.stage === 'params') {
+                    return (
+                      <Text key={i} size={200} weight="semibold"
+                            style={{ color: r.success ? '#00b894' : '#ff7675' }}>
+                        {r.success ? 'Parameters — Done ✓' : 'Parameters — Failed ✗'}
+                      </Text>
+                    );
+                  }
+                  return null;
+                })}
             </div>
           )}
           <ProgressBar
             percent={session.progress.percent}
             message={session.progress.message || orchestrator.stage}
-            visible={session.isConnected && orchestrator.stage !== 'done' && orchestrator.stage !== 'idle'}
+            visible={session.isConnected && orchestrator.stage !== 'done' && orchestrator.stage !== 'idle' && orchestrator.stage !== 'error'}
           />
         </div>
         <AltitudeDisplay altitude={session.isConnected ? 0 : null} />

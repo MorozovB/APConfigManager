@@ -46,7 +46,10 @@ namespace APConfigManager.Api.Controllers
                     BaudRate = session.BaudRate,
                     State = session.State.ToString(),
                     ConnectedAt = session.ConnectedAt,
-                    DeviceSerial = session.DeviceSerial
+                    DeviceSerial = session.DeviceSerial,
+                    FirmwareVersion = session.FirmwareVersion,
+                    FirmwareDescription = session.FirmwareDescription,
+                    BootloaderRevision = session.BootloaderRevision
                 };
 
                 await hubContext.Clients.Group(session.Id.ToString())
@@ -79,7 +82,10 @@ namespace APConfigManager.Api.Controllers
                 BaudRate = session.BaudRate,
                 State = session.State.ToString(),
                 ConnectedAt = session.ConnectedAt,
-                DeviceSerial = session.DeviceSerial
+                DeviceSerial = session.DeviceSerial,
+                FirmwareVersion = session.FirmwareVersion,
+                FirmwareDescription = session.FirmwareDescription,
+                BootloaderRevision = session.BootloaderRevision
             }).ToList();
 
             return Ok(response);
@@ -104,7 +110,10 @@ namespace APConfigManager.Api.Controllers
                 BaudRate = session.BaudRate,
                 State = session.State.ToString(),
                 ConnectedAt = session.ConnectedAt,
-                DeviceSerial = session.DeviceSerial
+                DeviceSerial = session.DeviceSerial,
+                FirmwareVersion = session.FirmwareVersion,
+                FirmwareDescription = session.FirmwareDescription,
+                BootloaderRevision = session.BootloaderRevision
             };
 
             return Ok(response);

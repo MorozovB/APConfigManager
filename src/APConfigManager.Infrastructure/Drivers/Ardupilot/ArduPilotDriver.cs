@@ -1,3 +1,4 @@
+using System;
 using System.Runtime.InteropServices;
 using APConfigManager.Core.Enums;
 using APConfigManager.Core.Exceptions;
@@ -6,6 +7,7 @@ using APConfigManager.Core.Interfaces.Transport;
 using APConfigManager.Core.Models;
 using APConfigManager.Core.Results;
 using APConfigManager.Infrastructure.Transport;
+using static MAVLink;
 
 namespace APConfigManager.Infrastructure.Drivers.Ardupilot;
 
@@ -114,20 +116,52 @@ public class ArduPilotDriver : IAutopilotDriver
     {
         this.port.Open(port, baudRate);
 
+        var fwVersion = string.Empty;
+        var fwDescription = string.Empty;
+        uint blRevision = 0;
+
         try
         {
             await this.telemetry.SendHeartbeatAsync(ct);
             await WaitForDeviceHeartbeatAsync(ct);
             currentMode = BootMode.Normal;
+
+            try
+            {
+                fwVersion = await telemetry.GetFirmwareVersionAsync(ct);
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                var bootMessages = await telemetry.ReadBootMessagesAsync(3000, ct);
+                foreach (var msg in bootMessages)
+                {
+                    // ArduPilot format: "ArduPlane V4.5.5-beta1 (2ff5b966)"
+                    // Custom format: "MyVersion: 2.0.0"
+                    if (!string.IsNullOrWhiteSpace(msg))
+                    {
+                        if (fwDescription.Length > 0)
+                        {
+                            fwDescription += " | ";
+                        }
+         
+                        fwDescription += msg;
+                    }
+                }
+            }
+            catch { }
         }
         catch
         {
             this.port.Flush();
             var syncOk = await this.bootloader.SyncAsync(ct);
-
             if (syncOk)
             {
-                await this.bootloader.GetDeviceInfoAsync(ct);
+                var deviceInfo = await this.bootloader.GetDeviceInfoAsync(ct);
+                blRevision = deviceInfo.BootloaderRevision;
                 currentMode = BootMode.Bootloader;
             }
             else
@@ -139,8 +173,6 @@ public class ArduPilotDriver : IAutopilotDriver
         }
 
         var portInfo = this.portScanner.GetPortDescription(port);
-        Console.WriteLine($"ConnectAsync: port={port}, portInfo={portInfo != null}, serial='{portInfo?.DeviceSerial}', desc='{portInfo?.Description}'");
-
         this.currentMode = currentMode;
 
         var state = this.currentMode == BootMode.Bootloader
@@ -154,7 +186,10 @@ public class ArduPilotDriver : IAutopilotDriver
             BaudRate = baudRate,
             State = state,
             ConnectedAt = DateTime.UtcNow,
-            DeviceSerial = portInfo?.DeviceSerial ?? string.Empty
+            DeviceSerial = portInfo?.DeviceSerial ?? string.Empty,
+            FirmwareVersion = fwVersion,
+            FirmwareDescription = fwDescription,
+            BootloaderRevision = blRevision
         };
 
         return session;
@@ -204,6 +239,17 @@ public class ArduPilotDriver : IAutopilotDriver
 
         currentMode = BootMode.Normal;
         UpdateSessionPortAndState(targetPort, DeviceState.Connected);
+
+        try
+        {
+            var fwVer = await telemetry.GetFirmwareVersionAsync(ct);
+            if (session != null)
+                session.FirmwareVersion = fwVer;
+        }
+        catch
+        {
+            // Skip if version query fails
+        }
 
         Console.WriteLine($"Reconnected on {targetPort}");
     }
@@ -655,7 +701,9 @@ public class ArduPilotDriver : IAutopilotDriver
                     throw new DeviceConnectionException("Bootloader sync failed.");
                 }
 
-                await bootloader.GetDeviceInfoAsync(ct);
+                var info = await bootloader.GetDeviceInfoAsync(ct);
+                if (session != null)
+                    session.BootloaderRevision = info.BootloaderRevision;
 
                 currentMode = BootMode.Bootloader;
                 UpdateSessionPortAndState(newPort, DeviceState.InBootloader);
@@ -862,7 +910,10 @@ public class ArduPilotDriver : IAutopilotDriver
             BaudRate = session.BaudRate,
             State = state,
             ConnectedAt = session.ConnectedAt,
-            DeviceSerial = session.DeviceSerial
+            DeviceSerial = session.DeviceSerial,
+            FirmwareVersion = session.FirmwareVersion,
+            FirmwareDescription = session.FirmwareDescription,
+            BootloaderRevision = session.BootloaderRevision
         };
     }
 
@@ -883,7 +934,10 @@ public class ArduPilotDriver : IAutopilotDriver
             BaudRate = session.BaudRate,
             State = state,
             ConnectedAt = session.ConnectedAt,
-            DeviceSerial = session.DeviceSerial
+            DeviceSerial = session.DeviceSerial,
+            FirmwareVersion = session.FirmwareVersion,
+            FirmwareDescription = session.FirmwareDescription,
+            BootloaderRevision = session.BootloaderRevision
         };
     }
 

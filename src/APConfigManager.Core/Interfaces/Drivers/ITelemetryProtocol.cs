@@ -51,5 +51,10 @@ namespace APConfigManager.Core.Interfaces.Drivers
         /// MAVLink command to update the bootloader firmware (if supported).
         /// </summary>
         Task<bool> FlashBootloaderAsync(CancellationToken ct);
+
+        /// <summary>
+        /// Reads boot messages from the device within a specified timeout.
+        /// </summary>
+        Task<List<string>> ReadBootMessagesAsync(int timeoutMs, CancellationToken ct);
     }
 }

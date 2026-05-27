@@ -16,5 +16,11 @@ namespace APConfigManager.Api.Dto
         public DateTime? ConnectedAt { get; set; } = DateTime.UtcNow;
 
         public string DeviceSerial { get; set; } = string.Empty;
+
+        public string FirmwareVersion { get; set; } = string.Empty;
+
+        public uint BootloaderRevision { get; set; }
+
+        public string FirmwareDescription { get; set; } = string.Empty;
     }
 }

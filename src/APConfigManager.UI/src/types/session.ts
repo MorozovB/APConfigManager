@@ -13,6 +13,9 @@ export interface DeviceSession {
   state: DeviceState;
   connectedAt: string;
   deviceSerial: string;
+  firmwareVersion: string;
+  firmwareDescription: string;
+  bootloaderRevision: number;
 }
 
 

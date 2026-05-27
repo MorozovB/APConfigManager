@@ -212,6 +212,12 @@ public class MavLinkProtocol : ITelemetryProtocol
     /// </summary>
     public async Task<string> GetFirmwareVersionAsync(CancellationToken ct)
     {
+        for (var i = 0; i < 3; i++)
+        {
+            await SendHeartbeatAsync(ct);
+            await Task.Delay(500, ct);
+        }
+
         var command = new mavlink_command_long_t
         {
             target_system = 1,
@@ -238,9 +244,26 @@ public class MavLinkProtocol : ITelemetryProtocol
             return string.Empty;
 
         var version = (mavlink_autopilot_version_t)response.data;
-        return BitConverter.ToString(version.flight_custom_version)
-            .Replace("-", "")
-            .ToLower();
+
+        var major = (version.flight_sw_version >> 24) & 0xFF;
+        var minor = (version.flight_sw_version >> 16) & 0xFF;
+        var patch = (version.flight_sw_version >> 8) & 0xFF;
+        var typeCode = version.flight_sw_version & 0xFF;
+
+        var typeSuffix = typeCode switch
+        {
+            255 => "",
+            192 => "-rc",
+            128 => "-beta",
+            64 => "-alpha",
+            0 => "-dev",
+            _ => $"-t{typeCode}"
+        };
+
+        var versionString = $"{major}.{minor}.{patch}{typeSuffix}";
+        Console.WriteLine($"Firmware version: {versionString} (raw: 0x{version.flight_sw_version:X8})");
+
+        return versionString;
     }
 
     /// <summary>
@@ -373,6 +396,45 @@ public class MavLinkProtocol : ITelemetryProtocol
 
         Console.WriteLine($"FlashBootloader: rejected with result={resultName}");
         return false;
+    }
+
+    /// <summary>
+    /// Reboots the device into bootloader mode and reads boot messages for a specified timeout.
+    /// </summary>
+    public async Task<List<string>> ReadBootMessagesAsync(int timeoutMs, CancellationToken ct)
+    {
+        var messages = new List<string>();
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(timeoutMs);
+
+        try
+        {
+            while (true)
+            {
+                var msg = await ReadMessageAsync(cts.Token);
+
+                if (msg is null)
+                    continue;
+
+                if (msg.msgid == (uint)MAVLINK_MSG_ID.STATUSTEXT)
+                {
+                    var statusText = (mavlink_statustext_t)msg.data;
+                    var text = System.Text.Encoding.ASCII.GetString(statusText.text).TrimEnd('\0');
+
+                    if (!string.IsNullOrWhiteSpace(text))
+                    {
+                        messages.Add(text);
+                        Console.WriteLine($"STATUSTEXT: {text}");
+                    }
+                }
+            }
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+        }
+
+        return messages;
     }
 
 
