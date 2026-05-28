@@ -147,7 +147,7 @@ public class ArduPilotDriver : IAutopilotDriver
                         {
                             fwDescription += " | ";
                         }
-         
+
                         fwDescription += msg;
                     }
                 }

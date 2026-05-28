@@ -1,3 +1,4 @@
+using System.Text;
 using APConfigManager.Core.Interfaces.Drivers;
 using APConfigManager.Core.Models;
 using APConfigManager.Core.Interfaces.Transport;
@@ -420,7 +421,7 @@ public class MavLinkProtocol : ITelemetryProtocol
                 if (msg.msgid == (uint)MAVLINK_MSG_ID.STATUSTEXT)
                 {
                     var statusText = (mavlink_statustext_t)msg.data;
-                    var text = System.Text.Encoding.ASCII.GetString(statusText.text).TrimEnd('\0');
+                    var text = System.Text.Encoding.UTF8.GetString(statusText.text).TrimEnd('\0');
 
                     if (!string.IsNullOrWhiteSpace(text))
                     {
@@ -436,7 +437,6 @@ public class MavLinkProtocol : ITelemetryProtocol
 
         return messages;
     }
-
 
     /// <summary>
     /// Reads and parses a single MAVLink message from the port.

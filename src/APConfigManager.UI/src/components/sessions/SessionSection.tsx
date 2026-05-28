@@ -236,9 +236,10 @@ export const SessionSection = ({ index }: Props) => {
           Disconnect
         </Button>
         <DeviceStatusBadge state={session.deviceState} />
+        <DeviceInfoPanel session={session.data} visible={session.isConnected} />
       </div>
 
-      <DeviceInfoPanel session={session.data} visible={session.isConnected} />
+      {/*<DeviceInfoPanel session={session.data} visible={session.isConnected} />*/}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
         <ProfileSelector

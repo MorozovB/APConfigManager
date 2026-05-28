@@ -47,18 +47,6 @@ export const DeviceInfoPanel = ({ session, visible }: Props) => {
         </div>
       )}
 
-      <div style={{
-        padding: '4px 10px',
-        borderRadius: '4px',
-        backgroundColor: '#1a2a1a',
-        border: '1px solid #4ade8044',
-      }}>
-        <Text size={100} style={{ color: '#a0a0a0', marginRight: '6px' }}>Port</Text>
-        <Text size={200} weight="semibold" style={{ color: '#4ade80' }}>
-          {session.port}
-        </Text>
-      </div>
-
       {session.firmwareDescription && (
         <div style={{
           padding: '4px 10px',
