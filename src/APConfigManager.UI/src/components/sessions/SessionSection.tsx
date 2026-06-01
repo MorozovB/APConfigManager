@@ -324,7 +324,7 @@ export const SessionSection = ({ index }: Props) => {
             visible={session.isConnected && orchestrator.stage !== 'done' && orchestrator.stage !== 'idle' && orchestrator.stage !== 'error'}
           />
         </div>
-        <AltitudeDisplay altitude={session.isConnected ? 0 : null} />
+        <AltitudeDisplay altitude={session.altitude} />
         <AccelerometerWidget data={session.isConnected ? accelData : []} />
       </div>
 

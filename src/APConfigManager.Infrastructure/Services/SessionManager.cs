@@ -18,6 +18,7 @@ public class SessionManager : ISessionManager, IAsyncDisposable
     private readonly Dictionary<Guid, IAutopilotDriver> drivers = new();
     private readonly SemaphoreSlim _lock = new(1, 1);
     private readonly Func<IAutopilotDriver> driverFactory;
+    private readonly Dictionary<Guid, Action<float>> telemetryCallbacks = new();
 
     /// <summary>
     /// Initializes the session manager with a driver factory.
@@ -130,7 +131,13 @@ public class SessionManager : ISessionManager, IAsyncDisposable
         return driver;
     }
 
-    /// <inheritdoc />
+    public void SetTelemetryCallback(Guid sessionId, Action<float> onAltitude)
+    {
+        telemetryCallbacks[sessionId] = onAltitude;
+        if (drivers.TryGetValue(sessionId, out var driver))
+            driver.StartTelemetry(onAltitude);
+    }
+
     public void SyncSessionFromDriver(Guid sessionId)
     {
         if (!drivers.TryGetValue(sessionId, out var driver))

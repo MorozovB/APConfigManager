@@ -52,6 +52,12 @@ namespace APConfigManager.Api.Controllers
                     BootloaderRevision = session.BootloaderRevision
                 };
 
+                sessionManager.SetTelemetryCallback(session.Id, altitude =>
+                {
+                    hubContext.Clients.Group(session.Id.ToString())
+                        .SendAsync("AltitudeUpdate", altitude);
+                });
+
                 await hubContext.Clients.Group(session.Id.ToString())
                     .SendAsync("DeviceStateChanged", session.Id.ToString(), "Connected", ct);
 

@@ -92,6 +92,11 @@ public class ArduPilotDriver : IAutopilotDriver
     private DeviceSession? session;
     private BootMode currentMode = BootMode.Normal;
 
+    //Altitude telemetry
+    private CancellationTokenSource? telemetryCts;
+    private Task? telemetryTask;
+    private Action<float>? onAltitudeUpdate;
+
     /// <summary>
     /// Initializes the driver with protocol and transport dependencies.
     /// </summary>
@@ -226,6 +231,7 @@ public class ArduPilotDriver : IAutopilotDriver
             targetPort = session.Port;
 
         port.Open(targetPort, session.BaudRate);
+        port.Flush();
 
         try
         {
@@ -239,6 +245,12 @@ public class ArduPilotDriver : IAutopilotDriver
 
         currentMode = BootMode.Normal;
         UpdateSessionPortAndState(targetPort, DeviceState.Connected);
+
+        if (onAltitudeUpdate != null)
+        {
+            StartTelemetry(onAltitudeUpdate);
+        }
+
 
         try
         {
@@ -275,6 +287,8 @@ public class ArduPilotDriver : IAutopilotDriver
         IProgress<(int percent, string message)> progress,
         CancellationToken ct)
     {
+        StopTelemetry();
+
         ArgumentNullException.ThrowIfNull(firmware);
         ArgumentNullException.ThrowIfNull(progress);
         EnsureConnected();
@@ -377,6 +391,8 @@ public class ArduPilotDriver : IAutopilotDriver
     IProgress<(int percent, string message)> progress,
     CancellationToken ct)
     {
+        StopTelemetry();
+
         ArgumentNullException.ThrowIfNull(progress);
         EnsureConnected();
         await EnsureModeAsync(BootMode.Bootloader, ct);
@@ -430,6 +446,8 @@ public class ArduPilotDriver : IAutopilotDriver
     IProgress<(int current, int total)> progress,
     CancellationToken ct)
     {
+        StopTelemetry();
+
         ArgumentNullException.ThrowIfNull(parameters);
         ArgumentNullException.ThrowIfNull(progress);
         EnsureConnected();
@@ -670,6 +688,8 @@ public class ArduPilotDriver : IAutopilotDriver
     /// </summary>
     public async Task<BootResult> RebootAsync(BootMode mode, CancellationToken ct)
     {
+        StopTelemetry();
+
         EnsureConnected();
 
         try
@@ -782,6 +802,8 @@ public class ArduPilotDriver : IAutopilotDriver
     /// </summary>
     public async Task<BootloaderUpdateResult> UpdateBootloaderAsync(CancellationToken ct)
     {
+        StopTelemetry();
+
         EnsureConnected();
 
         try
@@ -851,13 +873,14 @@ public class ArduPilotDriver : IAutopilotDriver
     /// </summary>
     public Task DisconnectAsync()
     {
+        StopTelemetry();
         if (this.port.IsOpen)
         {
             this.port.Close();
         }
 
         session = null;
-        this.currentMode = BootMode.Normal;
+        currentMode = BootMode.Normal;
         return Task.CompletedTask;
     }
 
@@ -873,6 +896,33 @@ public class ArduPilotDriver : IAutopilotDriver
         {
             throw new SessionException("No active session. Call ConnectAsync first.");
         }
+    }
+
+    public void StartTelemetry(Action<float> onAltitude)
+    {
+        StopTelemetry();
+        onAltitudeUpdate = onAltitude;
+        telemetryCts = new CancellationTokenSource();
+        telemetryTask = Task.Run(async () =>
+        {
+            await telemetry.ReadTelemetryLoopAsync(alt =>
+            {
+                if (session != null)
+                {
+                    session.LastAltitude = alt;
+                    session.LastTelemetryAt = DateTime.UtcNow;
+                }
+                onAltitudeUpdate?.Invoke(alt);
+            }, telemetryCts.Token);
+        });
+    }
+
+    public void StopTelemetry()
+    {
+        telemetryCts?.Cancel();
+        telemetryCts?.Dispose();
+        telemetryCts = null;
+        telemetryTask = null;
     }
 
     /// <summary>

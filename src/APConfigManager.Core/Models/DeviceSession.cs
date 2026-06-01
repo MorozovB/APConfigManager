@@ -39,7 +39,13 @@ namespace APConfigManager.Core.Models
 
         //For test
         public string FirmwareVersion { get; set; } = string.Empty;
+
         public uint BootloaderRevision { get; set; }
+
         public string FirmwareDescription { get; set; } = string.Empty;
+
+        public float LastAltitude { get; set; }
+
+        public DateTime LastTelemetryAt { get; set; }
     }
 }

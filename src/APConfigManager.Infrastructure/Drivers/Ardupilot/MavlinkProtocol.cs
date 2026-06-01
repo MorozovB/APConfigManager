@@ -115,14 +115,15 @@ public class MavLinkProtocol : ITelemetryProtocol
                 {
                     consecutiveNulls++;
                     var threshold = parameters.Count > 0 ? 3 : 5;
-
                     if (consecutiveNulls >= threshold)
                         break;
-
                     continue;
                 }
 
                 consecutiveNulls = 0;
+
+                if (msg.data is null)
+                    continue;
 
                 if (msg.msgid != (uint)MAVLINK_MSG_ID.PARAM_VALUE)
                     continue;
@@ -439,6 +440,37 @@ public class MavLinkProtocol : ITelemetryProtocol
     }
 
     /// <summary>
+    /// Reads telemetry data in a loop, invoking the provided callback with the altitude value whenever a new telemetry message is received.
+    /// </summary>
+    public async Task ReadTelemetryLoopAsync(Action<float> onAltitude, CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                var msg = await ReadMessageAsync(ct);
+                if (msg is null) continue;
+
+                if (msg.msgid == (uint)MAVLINK_MSG_ID.GLOBAL_POSITION_INT)
+                {
+                    var pos = (mavlink_global_position_int_t)msg.data;
+                    var altitudeM = pos.relative_alt / 1000.0f;
+                    onAltitude(altitudeM);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch
+            {
+                await Task.Delay(100, ct);
+            }
+        }
+    }
+
+
+    /// <summary>
     /// Reads and parses a single MAVLink message from the port.
     /// </summary>
     private async Task<MAVLinkMessage?> ReadMessageAsync(CancellationToken ct)
@@ -458,8 +490,11 @@ public class MavLinkProtocol : ITelemetryProtocol
                 }
             }, ct);
 
-            if (msg == null || msg.data == null)
+            if (msg is null)
                 return null;
+
+            if (msg.data is null)
+                return msg;
 
             return msg;
         }
@@ -487,6 +522,9 @@ public class MavLinkProtocol : ITelemetryProtocol
                 var msg = await ReadMessageAsync(cts.Token);
 
                 if (msg is null)
+                    continue;
+
+                if (msg.data is null)
                     continue;
 
                 if (msg.msgid == (uint)messageId)

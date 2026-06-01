@@ -31,6 +31,8 @@ export const useDeviceSession = () => {
 
   const [error, setError] = useState<string | null>(null);
 
+  const [altitude, setAltitude] = useState<number | null>(null);
+
   const connectionRef = useRef<HubConnection | null>(null);
   const dataRef = useRef<DeviceSession | null>(null);
 
@@ -92,6 +94,9 @@ export const useDeviceSession = () => {
       onOperationCompleted: (_sessionId, result) => {
         setLastResult(result);
       },
+      onAltitudeUpdate: (alt) => {
+        setAltitude(alt);
+      },
     });
 
     connection.onreconnected(() => {
@@ -147,6 +152,7 @@ export const useDeviceSession = () => {
       setProgress({ percent: 0, message: '' });
       setLastResult(null);
       setError(null);
+      setAltitude(null);
     }
   }, [data]);
 
@@ -171,5 +177,6 @@ export const useDeviceSession = () => {
     refreshSession,
     logEntries,
     clearLog,
+    altitude,
   };
 };

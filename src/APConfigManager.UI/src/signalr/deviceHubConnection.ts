@@ -8,6 +8,8 @@ export type StateChangedCallback = (sessionId: string, state: string) => void;
 
 export type OperationCompletedCallback = (sessionId: string, result: unknown) => void;
 
+export type AltitudeCallback = (altitude: number) => void;
+
 
 export const createHubConnection = (): HubConnection => {
   const connection = new HubConnectionBuilder()
@@ -45,6 +47,7 @@ export const registerHandlers = (
     onParamProgress?: ParamProgressCallback;
     onStateChanged?: StateChangedCallback;
     onOperationCompleted?: OperationCompletedCallback;
+    onAltitudeUpdate?: AltitudeCallback;
   }
 ): void => {
 
@@ -77,6 +80,12 @@ export const registerHandlers = (
       handlers.onOperationCompleted!(sessionId, result);
     });
   }
+
+  if (handlers.onAltitudeUpdate) {
+    connection.on('AltitudeUpdate', (altitude: number) => {
+      handlers.onAltitudeUpdate!(altitude);
+    });
+  }
 };
 
 export const removeHandlers = (connection: HubConnection): void => {
@@ -85,6 +94,7 @@ export const removeHandlers = (connection: HubConnection): void => {
   connection.off('ParamProgress');
   connection.off('DeviceStateChanged');
   connection.off('OperationCompleted');
+  connection.off('AltitudeUpdate');
 };
 
 export const startConnection = async (connection: HubConnection): Promise<void> => {

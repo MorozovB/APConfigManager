@@ -56,5 +56,11 @@ namespace APConfigManager.Core.Interfaces.Drivers
         /// Reads boot messages from the device within a specified timeout.
         /// </summary>
         Task<List<string>> ReadBootMessagesAsync(int timeoutMs, CancellationToken ct);
+
+        /// <summary>
+        /// Reads telemetry data in a loop, invoking the provided callback with the altitude value whenever a new telemetry message is received.
+        /// The loop continues until the cancellation token is triggered.
+        /// </summary>
+        Task ReadTelemetryLoopAsync(Action<float> onAltitude, CancellationToken ct);
     }
 }

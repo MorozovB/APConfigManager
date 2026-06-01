@@ -72,5 +72,15 @@ namespace APConfigManager.Core.Interfaces.Drivers
         /// Returns the current session state (port, mode) held by the driver.
         /// </summary>
         DeviceSession? GetCurrentSession();
+
+        /// <summary>
+        /// Returns true if the driver is currently connected to a device, false otherwise.
+        /// </summary>
+        void StartTelemetry(Action<float> onAltitude);
+
+        /// <summary>
+        /// Stops the telemetry reading loop. 
+        /// </summary>
+        void StopTelemetry();
     }
 }

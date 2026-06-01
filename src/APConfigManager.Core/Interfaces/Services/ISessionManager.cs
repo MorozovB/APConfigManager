@@ -37,5 +37,11 @@ namespace APConfigManager.Core.Interfaces.Services
         /// Updates the stored session from the driver's current connection state.
         /// </summary>
         void SyncSessionFromDriver(Guid sessionId);
+
+        /// <summary>
+        /// Setting a callback for receiving telemetry updates (e.g., altitude) from the driver,
+        /// which will update the session's telemetry data in real-time.
+        /// </summary>
+        void SetTelemetryCallback(Guid sessionId, Action<float> onAltitude);
     }
 }
