@@ -1,12 +1,10 @@
 using APConfigManager.Api.Hubs;
 using APConfigManager.Core.Data;
-using APConfigManager.Core.Interfaces.Drivers;
 using APConfigManager.Core.Interfaces.Parsers;
 using APConfigManager.Core.Interfaces.Services;
 using APConfigManager.Core.Interfaces.Transport;
 using APConfigManager.Infrastructure.Data;
 using APConfigManager.Infrastructure.Drivers.Ardupilot;
-using APConfigManager.Infrastructure.Drivers.ArduPilot;
 using APConfigManager.Infrastructure.Parsers;
 using APConfigManager.Infrastructure.Services;
 using APConfigManager.Infrastructure.Transport;

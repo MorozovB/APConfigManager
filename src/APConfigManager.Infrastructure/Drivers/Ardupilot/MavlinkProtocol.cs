@@ -5,7 +5,7 @@ using APConfigManager.Core.Interfaces.Transport;
 using APConfigManager.Infrastructure.Drivers.Ardupilot;
 using static MAVLink;
 
-namespace APConfigManager.Infrastructure.Drivers.ArduPilot;
+namespace APConfigManager.Infrastructure.Drivers.Ardupilot;
 
 /// <summary>
 /// MAVLink v1 protocol implementation for ArduPilot telemetry and commands.
@@ -475,16 +475,26 @@ public class MavLinkProtocol : ITelemetryProtocol
     /// </summary>
     private async Task<MAVLinkMessage?> ReadMessageAsync(CancellationToken ct)
     {
+        if (ct.IsCancellationRequested)
+            return null;
+
         try
         {
             var msg = await Task.Run(() =>
             {
-                ct.ThrowIfCancellationRequested();
                 try
                 {
                     return parser.ReadPacket(port.BaseStream);
                 }
                 catch (TimeoutException)
+                {
+                    return null;
+                }
+                catch (OperationCanceledException)
+                {
+                    return null;
+                }
+                catch (IOException)
                 {
                     return null;
                 }
@@ -497,6 +507,10 @@ public class MavLinkProtocol : ITelemetryProtocol
                 return msg;
 
             return msg;
+        }
+        catch (OperationCanceledException)
+        {
+            return null;
         }
         catch (Exception) when (!ct.IsCancellationRequested)
         {

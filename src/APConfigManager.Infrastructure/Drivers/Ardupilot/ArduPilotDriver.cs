@@ -395,7 +395,7 @@ public class ArduPilotDriver : IAutopilotDriver
 
         ArgumentNullException.ThrowIfNull(progress);
         EnsureConnected();
-        await EnsureModeAsync(BootMode.Bootloader, ct);
+        //await EnsureModeAsync(BootMode.Bootloader, ct);
 
         try
         {

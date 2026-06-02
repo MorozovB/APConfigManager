@@ -33,9 +33,9 @@ public class EraseController : ControllerBase
     {
         try
         {
-            var progress = new Progress<(int percent, string message)>(p =>
+            var progress = new Progress<(int percent, string message)>(async p =>
             {
-                hubContext.Clients.Group(sessionId.ToString())
+                await hubContext.Clients.Group(sessionId.ToString())
                     .SendAsync("EraseProgress", p.percent, p.message);
             });
 
