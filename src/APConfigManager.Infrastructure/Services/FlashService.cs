@@ -70,6 +70,8 @@ public class FlashService : IFlashService
             }
         }
 
+        driver.StopTelemetry();
+
         var deviceInfo = await driver.GetDeviceInfoAsync(ct);
 
         var validation = firmwareValidator.Validate(firmware, deviceInfo);

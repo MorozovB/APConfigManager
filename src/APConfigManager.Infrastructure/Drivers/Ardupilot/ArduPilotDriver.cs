@@ -270,11 +270,29 @@ public class ArduPilotDriver : IAutopilotDriver
     /// Retrieves device information from the bootloader.
     /// Switches to bootloader mode if not already in it.
     /// </summary>
+    //public async Task<DeviceInfo> GetDeviceInfoAsync(CancellationToken ct)
+    //{
+    //    EnsureConnected();
+    //    await EnsureModeAsync(BootMode.Bootloader, ct);
+    //    return await this.bootloader.GetDeviceInfoAsync(ct);
+    //}
+
     public async Task<DeviceInfo> GetDeviceInfoAsync(CancellationToken ct)
     {
         EnsureConnected();
+        StopTelemetry();
+        port.Flush();
+
         await EnsureModeAsync(BootMode.Bootloader, ct);
-        return await this.bootloader.GetDeviceInfoAsync(ct);
+
+        if (currentMode == BootMode.Bootloader)
+        {
+            var synced = await bootloader.SyncAsync(ct);
+            if (!synced)
+                throw new DeviceConnectionException("Bootloader sync failed.");
+        }
+
+        return await bootloader.GetDeviceInfoAsync(ct);
     }
 
     /// <summary>
@@ -867,23 +885,6 @@ public class ArduPilotDriver : IAutopilotDriver
         }
     }
 
-    /// <summary>
-    /// Closes the serial port and releases resources.
-    /// Resets the session and mode to initial state.
-    /// </summary>
-    //public Task DisconnectAsync()
-    //{
-    //    StopTelemetry();
-    //    if (this.port.IsOpen)
-    //    {
-    //        this.port.Close();
-    //    }
-
-    //    session = null;
-    //    currentMode = BootMode.Normal;
-    //    return Task.CompletedTask;
-    //}
-
     public Task DisconnectAsync()
     {
         StopTelemetry();
@@ -929,14 +930,6 @@ public class ArduPilotDriver : IAutopilotDriver
         });
     }
 
-    //public void StopTelemetry()
-    //{
-    //    telemetryCts?.Cancel();
-    //    telemetryCts?.Dispose();
-    //    telemetryCts = null;
-    //    telemetryTask = null;
-    //}
-
     public void StopTelemetry()
     {
         var cts = telemetryCts;
@@ -965,6 +958,11 @@ public class ArduPilotDriver : IAutopilotDriver
     {
         if (this.currentMode == mode)
         {
+            if (mode == BootMode.Bootloader)
+            {
+                StopTelemetry();
+                port.Flush();
+            }
             return;
         }
 

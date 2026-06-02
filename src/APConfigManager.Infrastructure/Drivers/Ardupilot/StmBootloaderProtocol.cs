@@ -83,6 +83,9 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
         /// </summary>
         public async Task<DeviceInfo> GetDeviceInfoAsync(CancellationToken ct)
         {
+            if (!await SyncAsync(ct))
+                throw new BootloaderException("Bootloader sync failed before reading device info.");
+
             var boardId = await ReadRegisterAsync(ArduPilotConstants.GET_DEVICE, ArduPilotConstants.InfoBoardId, ct);
             var boardRevision = await ReadRegisterAsync(ArduPilotConstants.GET_DEVICE, ArduPilotConstants.InfoBoardRev, ct);
             var flashSize = await ReadRegisterAsync(ArduPilotConstants.GET_DEVICE, ArduPilotConstants.InfoFlashSize, ct);

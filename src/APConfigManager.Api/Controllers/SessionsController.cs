@@ -1,9 +1,10 @@
 using APConfigManager.Api.Dto;
 using APConfigManager.Api.Hubs;
+using APConfigManager.Core.Enums;
+using APConfigManager.Core.Exceptions;
 using APConfigManager.Core.Interfaces.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
-using APConfigManager.Core.Exceptions;
 
 namespace APConfigManager.Api.Controllers
 {
@@ -52,11 +53,14 @@ namespace APConfigManager.Api.Controllers
                     BootloaderRevision = session.BootloaderRevision
                 };
 
-                sessionManager.SetTelemetryCallback(session.Id, altitude =>
+                if (session.State != DeviceState.InBootloader)
                 {
-                    hubContext.Clients.Group(session.Id.ToString())
-                        .SendAsync("AltitudeUpdate", altitude);
-                });
+                    sessionManager.SetTelemetryCallback(session.Id, altitude =>
+                    {
+                        hubContext.Clients.Group(session.Id.ToString())
+                            .SendAsync("AltitudeUpdate", altitude);
+                    });
+                }
 
                 await hubContext.Clients.Group(session.Id.ToString())
                     .SendAsync("DeviceStateChanged", session.Id.ToString(), "Connected", ct);

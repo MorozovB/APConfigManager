@@ -70,5 +70,13 @@ public class FlashController : ControllerBase
         {
             return NotFound(ex.Message);
         }
+        catch (BootloaderException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+        catch (DeviceConnectionException ex)
+        {
+            return BadRequest(ex.Message);
+        }
     }
 }
