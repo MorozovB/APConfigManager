@@ -871,13 +871,25 @@ public class ArduPilotDriver : IAutopilotDriver
     /// Closes the serial port and releases resources.
     /// Resets the session and mode to initial state.
     /// </summary>
+    //public Task DisconnectAsync()
+    //{
+    //    StopTelemetry();
+    //    if (this.port.IsOpen)
+    //    {
+    //        this.port.Close();
+    //    }
+
+    //    session = null;
+    //    currentMode = BootMode.Normal;
+    //    return Task.CompletedTask;
+    //}
+
     public Task DisconnectAsync()
     {
         StopTelemetry();
+
         if (this.port.IsOpen)
-        {
             this.port.Close();
-        }
 
         session = null;
         currentMode = BootMode.Normal;
@@ -917,12 +929,33 @@ public class ArduPilotDriver : IAutopilotDriver
         });
     }
 
+    //public void StopTelemetry()
+    //{
+    //    telemetryCts?.Cancel();
+    //    telemetryCts?.Dispose();
+    //    telemetryCts = null;
+    //    telemetryTask = null;
+    //}
+
     public void StopTelemetry()
     {
-        telemetryCts?.Cancel();
-        telemetryCts?.Dispose();
+        var cts = telemetryCts;
+        var task = telemetryTask;
+        if (cts is null)
+            return;
+        cts.Cancel();
+        try
+        {
+            task?.Wait(TimeSpan.FromSeconds(5));
+        }
+        catch (AggregateException)
+        {  
+        }
+        cts.Dispose();
         telemetryCts = null;
         telemetryTask = null;
+        if (port.IsOpen)
+            port.Flush();
     }
 
     /// <summary>

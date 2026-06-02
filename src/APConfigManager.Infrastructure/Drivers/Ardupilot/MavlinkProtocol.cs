@@ -475,9 +475,7 @@ public class MavLinkProtocol : ITelemetryProtocol
     /// </summary>
     private async Task<MAVLinkMessage?> ReadMessageAsync(CancellationToken ct)
     {
-        if (ct.IsCancellationRequested)
-            return null;
-
+        ct.ThrowIfCancellationRequested();
         try
         {
             var msg = await Task.Run(() =>
@@ -490,27 +488,9 @@ public class MavLinkProtocol : ITelemetryProtocol
                 {
                     return null;
                 }
-                catch (OperationCanceledException)
-                {
-                    return null;
-                }
-                catch (IOException)
-                {
-                    return null;
-                }
-            }, ct);
-
-            if (msg is null)
-                return null;
-
-            if (msg.data is null)
-                return msg;
-
+            });
+            ct.ThrowIfCancellationRequested();
             return msg;
-        }
-        catch (OperationCanceledException)
-        {
-            return null;
         }
         catch (Exception) when (!ct.IsCancellationRequested)
         {
