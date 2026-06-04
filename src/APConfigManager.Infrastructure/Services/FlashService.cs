@@ -1,7 +1,9 @@
 using APConfigManager.Core.Enums;
 using APConfigManager.Core.Exceptions;
+using APConfigManager.Core.Interfaces.Drivers;
 using APConfigManager.Core.Interfaces.Parsers;
 using APConfigManager.Core.Interfaces.Services;
+using APConfigManager.Core.Models;
 using APConfigManager.Core.Results;
 
 namespace APConfigManager.Infrastructure.Services;
@@ -56,12 +58,18 @@ public class FlashService : IFlashService
                     && !string.IsNullOrWhiteSpace(firmware.GitIdentity)
                     && currentVersion.Equals(firmware.GitIdentity, StringComparison.OrdinalIgnoreCase))
                 {
-                    return new FlashResult
+                    var sameVersionResult = new FlashResult
                     {
                         Success = true,
                         WasSameVersion = true,
                         FirmwareVersion = firmware.Version
                     };
+
+                    UpdateSessionFirmwareMetadata(driver, firmware, sameVersionResult);
+                    sessionManager.SyncSessionFromDriver(sessionId);
+
+                    return sameVersionResult;
+
                 }
             }
             catch
@@ -89,9 +97,48 @@ public class FlashService : IFlashService
 
         if (result.Success)
         {
+            UpdateSessionFirmwareMetadata(driver, firmware, result);
             sessionManager.SyncSessionFromDriver(sessionId);
         }
 
         return result;
     }
+
+    private static void UpdateSessionFirmwareMetadata(
+        IAutopilotDriver driver,
+        FirmwarePackage firmware,
+        FlashResult result)
+    {
+        var currentSession = driver.GetCurrentSession();
+        if (currentSession is null)
+        {
+            return;
+        }
+
+        var version = FirstNonEmpty(
+            result.FirmwareVersion,
+            firmware.Version,
+            firmware.GitIdentity,
+            currentSession.FirmwareVersion);
+
+        if (!string.IsNullOrWhiteSpace(version))
+        {
+            currentSession.FirmwareVersion = version;
+            if (string.IsNullOrWhiteSpace(result.FirmwareVersion))
+            {
+                result.FirmwareVersion = version;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(firmware.Description))
+        {
+            currentSession.FirmwareDescription = firmware.Description;
+        }
+    }
+
+    private static string FirstNonEmpty(params string?[] values)
+    {
+        return values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? string.Empty;
+    }
+
 }
