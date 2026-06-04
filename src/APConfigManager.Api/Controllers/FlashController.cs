@@ -15,13 +15,19 @@ namespace APConfigManager.Api.Controllers;
 public class FlashController : ControllerBase
 {
     private readonly IFlashService flashService;
+    private readonly ISessionManager sessionManager;
     private readonly IHubContext<DeviceHub> hubContext;
 
-    public FlashController(IFlashService flashService, IHubContext<DeviceHub> hubContext)
+    public FlashController(
+      IFlashService flashService,
+      ISessionManager sessionManager,
+      IHubContext<DeviceHub> hubContext)
     {
         this.flashService = flashService;
+        this.sessionManager = sessionManager;
         this.hubContext = hubContext;
     }
+
 
     /// <summary>
     /// POST /api/sessions/{id}/flash — starts firmware flashing.
@@ -52,6 +58,8 @@ public class FlashController : ControllerBase
 
             if (result.Success)
             {
+                StartTelemetryForwarding(sessionId);
+
                 await hubContext.Clients.Group(sessionId.ToString())
                     .SendAsync("DeviceStateChanged", sessionId.ToString(), "Connected", ct);
             }
@@ -79,4 +87,13 @@ public class FlashController : ControllerBase
             return BadRequest(ex.Message);
         }
     }
+    private void StartTelemetryForwarding(Guid sessionId)
+    {
+        sessionManager.SetTelemetryCallback(sessionId, altitude =>
+        {
+            hubContext.Clients.Group(sessionId.ToString())
+                .SendAsync("AltitudeUpdate", altitude);
+        });
+    }
+
 }

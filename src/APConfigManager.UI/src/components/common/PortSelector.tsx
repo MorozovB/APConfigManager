@@ -1,4 +1,4 @@
-import { Dropdown, Option, Label } from '@fluentui/react-components';
+import { Dropdown, Option } from '@fluentui/react-components';
 import { PortInfo } from '../../types/device.ts';
 
 interface Props {

@@ -29,7 +29,9 @@ public class SerialPortAdapter : ISerialPortAdapter
         get
         {
             if (_serialPort is null || !_serialPort.IsOpen)
+            {
                 throw new InvalidOperationException("Serial port is not open.");
+            }                
 
             return _serialPort.BaseStream;
         }

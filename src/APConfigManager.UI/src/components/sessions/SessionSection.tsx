@@ -88,6 +88,13 @@ export const SessionSection = ({ index }: Props) => {
   }, [selectedProfileId, profiles, loadFromServer, addLog]);
 
   useEffect(() => {
+    const livePort = session.data?.port;
+    if (livePort) {
+      setSelectedPort(prev => (prev === livePort ? prev : livePort));
+    }
+  }, [session.data?.port]);
+
+  useEffect(() => {
     if (session.logEntries.length === 0) return;
     const latest = session.logEntries[session.logEntries.length - 1];
     addLog(latest, 'progress');

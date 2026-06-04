@@ -51,6 +51,7 @@ namespace APConfigManager.Api.Controllers
                 if (result.Success)
                 {
                     sessionManager.SyncSessionFromDriver(sessionId);
+                    StartTelemetryForwarding(sessionId);
                     await hubContext.Clients.Group(sessionId.ToString())
                         .SendAsync("DeviceStateChanged", sessionId.ToString(), "Connected", ct);
                 }
@@ -98,6 +99,7 @@ namespace APConfigManager.Api.Controllers
                 if (result.Success)
                 {
                     sessionManager.SyncSessionFromDriver(sessionId);
+                    StartTelemetryForwarding(sessionId);
                     await hubContext.Clients.Group(sessionId.ToString())
                         .SendAsync("DeviceStateChanged", sessionId.ToString(), "Connected", ct);
                 }
@@ -120,5 +122,15 @@ namespace APConfigManager.Api.Controllers
                 });
             }
         }
+
+        private void StartTelemetryForwarding(Guid sessionId)
+        {
+            sessionManager.SetTelemetryCallback(sessionId, altitude =>
+            {
+                hubContext.Clients.Group(sessionId.ToString())
+                    .SendAsync("AltitudeUpdate", altitude);
+            });
+        }
+
     }
 }
