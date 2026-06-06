@@ -116,9 +116,10 @@ export const SessionSection = ({ index }: Props) => {
 
   const handleDisconnect = useCallback(async () => {
     addLog('Disconnecting...');
+    orchestrator.reset();
     await session.disconnect();
     addLog('Disconnected', 'info');
-  }, [session, addLog]);
+  }, [session, orchestrator, addLog]);
 
   const handlePlay = useCallback(async () => {
     if (!session.sessionId) {
