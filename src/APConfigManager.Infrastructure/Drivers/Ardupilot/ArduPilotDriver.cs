@@ -246,10 +246,10 @@ public class ArduPilotDriver : IAutopilotDriver
         currentMode = BootMode.Normal;
         UpdateSessionPortAndState(targetPort, DeviceState.Connected);
 
-        if (onAltitudeUpdate != null)
-        {
-            StartTelemetry(onAltitudeUpdate);
-        }
+        //if (onAltitudeUpdate != null)
+        //{
+        //    StartTelemetry(onAltitudeUpdate);
+        //}
 
 
         try
@@ -280,7 +280,7 @@ public class ArduPilotDriver : IAutopilotDriver
     public async Task<DeviceInfo> GetDeviceInfoAsync(CancellationToken ct)
     {
         EnsureConnected();
-        StopTelemetry();
+        await StopTelemetryAsync();
         port.Flush();
 
         await EnsureModeAsync(BootMode.Bootloader, ct);
@@ -305,7 +305,7 @@ public class ArduPilotDriver : IAutopilotDriver
         IProgress<(int percent, string message)> progress,
         CancellationToken ct)
     {
-        StopTelemetry();
+        await StopTelemetryAsync();
 
         ArgumentNullException.ThrowIfNull(firmware);
         ArgumentNullException.ThrowIfNull(progress);
@@ -384,6 +384,11 @@ public class ArduPilotDriver : IAutopilotDriver
             await ReconnectAfterBootAsync(ct);
             progress.Report((100, "Done"));
 
+            if (onAltitudeUpdate != null)
+            {
+                await StartTelemetryAsync(onAltitudeUpdate);
+            }
+
             return new FlashResult
             {
                 Success = true,
@@ -409,7 +414,7 @@ public class ArduPilotDriver : IAutopilotDriver
     IProgress<(int percent, string message)> progress,
     CancellationToken ct)
     {
-        StopTelemetry();
+        await StopTelemetryAsync();
 
         ArgumentNullException.ThrowIfNull(progress);
         EnsureConnected();
@@ -430,6 +435,11 @@ public class ArduPilotDriver : IAutopilotDriver
             await bootloader.BootAsync(ct);
             await ReconnectAfterBootAsync(ct);
             progress.Report((100, "Done"));
+
+            if (onAltitudeUpdate != null)
+            {
+                await StartTelemetryAsync(onAltitudeUpdate);
+            }
 
             return new EraseResult { Success = true };
         }
@@ -464,7 +474,7 @@ public class ArduPilotDriver : IAutopilotDriver
     IProgress<(int current, int total)> progress,
     CancellationToken ct)
     {
-        StopTelemetry();
+        await StopTelemetryAsync();
 
         ArgumentNullException.ThrowIfNull(parameters);
         ArgumentNullException.ThrowIfNull(progress);
@@ -476,6 +486,14 @@ public class ArduPilotDriver : IAutopilotDriver
 
         try
         {
+            Console.WriteLine("Resetting parameters to defaults before upload...");
+            await telemetry.ResetParamsAsync(ct);
+            await Task.Delay(1000, ct);
+            await telemetry.RebootNormalAsync(ct);
+            port.Close();
+            await ReconnectAfterBootAsync(ct);
+            Console.WriteLine("Parameters reset. Reading current state...");
+
             Console.WriteLine("Reading parameters from device...");
             var deviceParams = await telemetry.RequestAllParamsAsync(ct);
 
@@ -674,6 +692,11 @@ public class ArduPilotDriver : IAutopilotDriver
 
             Console.WriteLine($"Done: sent={sent}, same={skippedSame}, missing={missing.Count}, failed={pending.Count}");
 
+            if (onAltitudeUpdate != null)
+            {
+                await StartTelemetryAsync(onAltitudeUpdate);
+            }
+
             return new ParameterUploadResult
             {
                 Success = pending.Count == 0,
@@ -706,7 +729,7 @@ public class ArduPilotDriver : IAutopilotDriver
     /// </summary>
     public async Task<BootResult> RebootAsync(BootMode mode, CancellationToken ct)
     {
-        StopTelemetry();
+        await StopTelemetryAsync();
 
         EnsureConnected();
 
@@ -820,7 +843,7 @@ public class ArduPilotDriver : IAutopilotDriver
     /// </summary>
     public async Task<BootloaderUpdateResult> UpdateBootloaderAsync(CancellationToken ct)
     {
-        StopTelemetry();
+        await StopTelemetryAsync();
 
         EnsureConnected();
 
@@ -864,6 +887,11 @@ public class ArduPilotDriver : IAutopilotDriver
 
             Console.WriteLine("Bootloader update complete. Reconnected.");
 
+            if (onAltitudeUpdate != null)
+            {
+                await StartTelemetryAsync(onAltitudeUpdate);
+            }
+
             return new BootloaderUpdateResult
             {
                 Success = true
@@ -885,16 +913,16 @@ public class ArduPilotDriver : IAutopilotDriver
         }
     }
 
-    public Task DisconnectAsync()
+    public async Task DisconnectAsync()
     {
-        StopTelemetry();
+        await StopTelemetryAsync();
 
         if (this.port.IsOpen)
             this.port.Close();
 
         session = null;
         currentMode = BootMode.Normal;
-        return Task.CompletedTask;
+       // return Task.CompletedTask;
     }
 
     /// <inheritdoc />
@@ -911,9 +939,9 @@ public class ArduPilotDriver : IAutopilotDriver
         }
     }
 
-    public void StartTelemetry(Action<float> onAltitude)
+    public async Task StartTelemetryAsync(Action<float> onAltitude)
     {
-        StopTelemetry();
+        await StopTelemetryAsync();
         onAltitudeUpdate = onAltitude;
         telemetryCts = new CancellationTokenSource();
         telemetryTask = Task.Run(async () =>
@@ -930,25 +958,33 @@ public class ArduPilotDriver : IAutopilotDriver
         });
     }
 
-    public void StopTelemetry()
+    public async Task StopTelemetryAsync()
     {
         var cts = telemetryCts;
         var task = telemetryTask;
         if (cts is null)
+        {
             return;
+        }
+
         cts.Cancel();
+
         try
         {
-            task?.Wait(TimeSpan.FromSeconds(5));
+            await task?.WaitAsync(TimeSpan.FromSeconds(5));
         }
         catch (AggregateException)
         {  
         }
+
         cts.Dispose();
         telemetryCts = null;
         telemetryTask = null;
+
         if (port.IsOpen)
+        {
             port.Flush();
+        }
     }
 
     /// <summary>
@@ -960,7 +996,7 @@ public class ArduPilotDriver : IAutopilotDriver
         {
             if (mode == BootMode.Bootloader)
             {
-                StopTelemetry();
+                StopTelemetryAsync();
                 port.Flush();
             }
             return;

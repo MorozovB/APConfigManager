@@ -78,7 +78,7 @@ public class FlashService : IFlashService
             }
         }
 
-        driver.StopTelemetry();
+        await driver.StopTelemetryAsync();
 
         var deviceInfo = await driver.GetDeviceInfoAsync(ct);
 
