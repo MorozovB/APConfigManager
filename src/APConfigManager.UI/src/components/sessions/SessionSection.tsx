@@ -181,6 +181,7 @@ export const SessionSection = ({ index }: Props) => {
         <Switch
           checked={enabled}
           onChange={(_e, data) => setEnabled(data.checked)}
+          disabled={session.isConnected}
         />
         <PortSelector
           ports={ports}
@@ -211,14 +212,14 @@ export const SessionSection = ({ index }: Props) => {
     }}>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+
         <Switch
           checked={enabled}
           onChange={(_e, data) => {
-            if (session.isConnected) {
-              session.disconnect();
-            }
+            if (session.isConnected) return;
             setEnabled(data.checked);
           }}
+          disabled={session.isConnected || isBusy}
         />
         <PortSelector
           ports={ports}

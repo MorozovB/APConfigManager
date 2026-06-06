@@ -16,9 +16,11 @@ function App() {
 
   const handleTabSelect = (_event: SelectTabEvent, data: SelectTabData) => {
     const tab = data.value as TabId;
-    if (tab !== 'config' && hasActiveSessions) return;
+    if (tab !== activeTab && hasActiveSessions) return;
     setActiveTab(tab);
   };
+
+  const isTabLocked = (tab: TabId) => hasActiveSessions && activeTab !== tab && tab !== 'config';
 
   return (
     <FluentProvider theme={darkTheme} style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -26,38 +28,48 @@ function App() {
 
       <div style={{ padding: '0 16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
         <TabList selectedValue={activeTab} onTabSelect={handleTabSelect} size="large">
-          <Tab value="config">Config</Tab>
+          <Tab
+            value="config"
+            disabled={isTabLocked('config')}
+            style={isTabLocked('config') ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}
+          >
+            Config
+          </Tab>
           <Tab
             value="profiles"
-            disabled={hasActiveSessions}
-            style={hasActiveSessions ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}
+            disabled={isTabLocked('profiles')}
+            style={isTabLocked('profiles') ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}
           >
             Profiles
           </Tab>
           <Tab
             value="tools"
-            disabled={hasActiveSessions}
-            style={hasActiveSessions ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}
+            disabled={isTabLocked('tools')}
+            style={isTabLocked('tools') ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}
           >
             Tools
           </Tab>
           <Tab
             value="settings"
-            disabled={hasActiveSessions}
-            style={hasActiveSessions ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}
+            disabled={isTabLocked('settings')}
+            style={isTabLocked('settings') ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}
           >
             Settings
           </Tab>
         </TabList>
 
-        {hasActiveSessions}
+        {hasActiveSessions && (
+          <Text size={200} style={{ color: '#fdcb6e' }}>
+            Disconnect all sessions to access other tabs
+          </Text>
+        )}
       </div>
 
       <div style={{ flex: 1, padding: '16px', overflow: 'auto' }}>
         {activeTab === 'config' && <SessionList />}
-        {activeTab === 'profiles' && !hasActiveSessions && <ProfilesPage />}
-        {activeTab === 'tools' && !hasActiveSessions && <ToolsPage />}
-        {activeTab === 'settings' && !hasActiveSessions && <SettingsPage />}
+        {activeTab === 'profiles' && <ProfilesPage />}
+        {activeTab === 'tools' && <ToolsPage />}
+        {activeTab === 'settings' && <SettingsPage />}
       </div>
     </FluentProvider>
   );

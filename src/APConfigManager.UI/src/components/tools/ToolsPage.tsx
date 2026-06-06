@@ -3,7 +3,6 @@ import { Text, Button  } from '@fluentui/react-components';
 import {
   EraserRegular,
   ArrowResetRegular,
-  WrenchRegular,
 } from '@fluentui/react-icons';
 
 import { usePorts } from '../../hooks/usePorts';
@@ -14,7 +13,7 @@ import { PortSelector } from '../common/PortSelector';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { ProgressBar } from '../common/ProgressBar';
 
-type ConfirmAction = 'erase' | 'resetParams' | 'recoverBootloader' | null;
+type ConfirmAction = 'erase' | 'resetParams' | null;
 
 export const ToolsPage = () => {
   const { ports } = usePorts();
@@ -26,7 +25,6 @@ export const ToolsPage = () => {
 
   const [eraseStatus, setEraseStatus] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [resetStatus, setResetStatus] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
-  const [blRecoverStatus, setBlRecoverStatus] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   const [resetLoading, setResetLoading] = useState(false);
 
@@ -34,7 +32,6 @@ export const ToolsPage = () => {
     if (!selectedPort) return;
     setEraseStatus(null);
     setResetStatus(null);
-    setBlRecoverStatus(null);
     await session.connect(selectedPort);
   }, [selectedPort, session]);
 
@@ -42,7 +39,6 @@ export const ToolsPage = () => {
     await session.disconnect();
     setEraseStatus(null);
     setResetStatus(null);
-    setBlRecoverStatus(null);
   }, [session]);
 
   const handleEraseClick = useCallback(() => {
@@ -95,18 +91,6 @@ export const ToolsPage = () => {
     }
   }, [session.sessionId]);
 
-  const handleRecoverBootloader = useCallback(() => {
-    setConfirmAction('recoverBootloader');
-  }, []);
-
-  const handleRecoverConfirm = useCallback(() => {
-    setConfirmAction(null);
-    // TODO: реализовать на Этапе 8 (кастомный bootloader recovery)
-    setBlRecoverStatus({
-      message: 'Bootloader recovery is not implemented yet. Will be available in a future update.',
-      type: 'info',
-    });
-  }, []);
 
   const handleConfirmCancel = useCallback(() => {
     setConfirmAction(null);
@@ -212,7 +196,6 @@ export const ToolsPage = () => {
           statusType={eraseStatus?.type}
         />
 
-        {/* Сброс параметров */}
         <ToolCard
           icon={<ArrowResetRegular />}
           title="Reset Parameters"
@@ -226,18 +209,18 @@ export const ToolsPage = () => {
           statusType={resetStatus?.type}
         />
 
-        <ToolCard
-          icon={<WrenchRegular />}
-          title="Recover Bootloader"
-          description="Restore the standard ArduPilot bootloader on a device that has a custom bootloader installed. Use this if the device is not recognized by standard tools."
-          buttonText="Recover"
-          buttonColor="#636e72"
-          onClick={handleRecoverBootloader}
-          disabled={isBusy}
-          loading={false}
-          statusMessage={blRecoverStatus?.message}
-          statusType={blRecoverStatus?.type}
-        />
+        {/*<ToolCard*/}
+        {/*  icon={<WrenchRegular />}*/}
+        {/*  title="Recover Bootloader"*/}
+        {/*  description="Restore the standard ArduPilot bootloader on a device that has a custom bootloader installed. Use this if the device is not recognized by standard tools."*/}
+        {/*  buttonText="Recover"*/}
+        {/*  buttonColor="#636e72"*/}
+        {/*  onClick={handleRecoverBootloader}*/}
+        {/*  disabled={isBusy}*/}
+        {/*  loading={false}*/}
+        {/*  statusMessage={blRecoverStatus?.message}*/}
+        {/*  statusType={blRecoverStatus?.type}*/}
+        {/*/>*/}
 
       </div>
 
@@ -248,9 +231,7 @@ export const ToolsPage = () => {
           message={confirmDialogs[confirmAction].message}
           confirmText={confirmDialogs[confirmAction].confirmText}
           onConfirm={
-            confirmAction === 'erase' ? handleEraseConfirm :
-              confirmAction === 'resetParams' ? handleResetConfirm :
-                handleRecoverConfirm
+            confirmAction === 'erase' ? handleEraseConfirm : handleResetConfirm
           }
           onCancel={handleConfirmCancel}
         />
