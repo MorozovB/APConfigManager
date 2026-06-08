@@ -1,3 +1,4 @@
+using System.IO;
 using System.Text;
 using APConfigManager.Core.Interfaces.Drivers;
 using APConfigManager.Core.Models;
@@ -495,6 +496,66 @@ public class MavLinkProtocol : ITelemetryProtocol
         catch (Exception) when (!ct.IsCancellationRequested)
         {
             return null;
+        }
+    }
+
+    public async Task ReadTelemetryLoopAsync(
+    Action<float> onAltitude,
+    Action? onDisconnected,
+    CancellationToken ct)
+    {
+        var consecutiveErrors = 0;
+
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                var msg = await ReadMessageAsync(ct);
+
+                if (msg is null)
+                {
+                    consecutiveErrors++;
+                    if (consecutiveErrors >= 10)
+                    {
+                        Console.WriteLine("Telemetry: device lost (10 consecutive read failures)");
+                        onDisconnected?.Invoke();
+                        break;
+                    }
+                    continue;
+                }
+
+                consecutiveErrors = 0;
+
+                if (msg.data is null)
+                    continue;
+
+                if (msg.msgid == (uint)MAVLINK_MSG_ID.GLOBAL_POSITION_INT)
+                {
+                    var pos = (mavlink_global_position_int_t)msg.data;
+                    var altitudeM = pos.relative_alt / 1000.0f;
+                    onAltitude(altitudeM);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (IOException)
+            {
+                Console.WriteLine("Telemetry: IOException — device disconnected");
+                onDisconnected?.Invoke();
+                break;
+            }
+            catch
+            {
+                consecutiveErrors++;
+                if (consecutiveErrors >= 10)
+                {
+                    Console.WriteLine("Telemetry: device lost");
+                    onDisconnected?.Invoke();
+                    break;
+                }
+            }
         }
     }
 

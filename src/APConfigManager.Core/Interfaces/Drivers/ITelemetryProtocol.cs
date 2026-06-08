@@ -62,5 +62,8 @@ namespace APConfigManager.Core.Interfaces.Drivers
         /// The loop continues until the cancellation token is triggered.
         /// </summary>
         Task ReadTelemetryLoopAsync(Action<float> onAltitude, CancellationToken ct);
+
+
+        Task ReadTelemetryLoopAsync(Action<float> onAltitude, Action? onDisconnected, CancellationToken ct);
     }
 }

@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { getSessions } from '../api/sessionsApi';
 
 export const useActiveSessions = () => {
   const [hasActive, setHasActive] = useState(false);
+  const falseCount = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -10,18 +11,24 @@ export const useActiveSessions = () => {
     const check = async () => {
       try {
         const sessions = await getSessions();
-        if (!cancelled) {
-          setHasActive(sessions.length > 0);
+        if (cancelled) return;
+
+        if (sessions.length > 0) {
+          falseCount.current = 0;
+          setHasActive(true);
+        } else {
+          falseCount.current++;
+          if (falseCount.current >= 3) {
+            setHasActive(false);
+          }
         }
       } catch {
-        if (!cancelled) {
-          setHasActive(false);
-        }
+        // API error during operation — keep current state, don't flicker
       }
     };
 
     check();
-    const interval = setInterval(check);
+    const interval = setInterval(check, 1000);
 
     return () => {
       cancelled = true;

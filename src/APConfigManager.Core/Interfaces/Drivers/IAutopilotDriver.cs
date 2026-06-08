@@ -76,11 +76,13 @@ namespace APConfigManager.Core.Interfaces.Drivers
         /// <summary>
         /// Returns true if the driver is currently connected to a device, false otherwise.
         /// </summary>
-        Task StartTelemetryAsync(Action<float> onAltitude);
+        void StartTelemetry(Action<float> onAltitude);
 
         /// <summary>
         /// Stops the telemetry reading loop. 
         /// </summary>
         Task StopTelemetryAsync();
+
+        void SetDisconnectCallback(Action onDisconnected);
     }
 }

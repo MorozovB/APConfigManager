@@ -135,7 +135,7 @@ public class SessionManager : ISessionManager, IAsyncDisposable
     {
         telemetryCallbacks[sessionId] = onAltitude;
         if (drivers.TryGetValue(sessionId, out var driver))
-            driver.StartTelemetryAsync(onAltitude);
+            driver.StartTelemetry(onAltitude);
     }
 
     public void SyncSessionFromDriver(Guid sessionId)

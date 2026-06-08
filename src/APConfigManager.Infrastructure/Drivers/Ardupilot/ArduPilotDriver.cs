@@ -21,6 +21,7 @@ public class ArduPilotDriver : IAutopilotDriver
     private const int HeartbeatTimeoutMs = 3000;
     private const int PortSwitchTimeoutSeconds = 20;
     private const int WriteParamsPasses = 3;
+    private Action? onDeviceDisconnected;
 
     private static readonly HashSet<string> ReadOnlyPrefixes = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -386,7 +387,7 @@ public class ArduPilotDriver : IAutopilotDriver
 
             if (onAltitudeUpdate != null)
             {
-                await StartTelemetryAsync(onAltitudeUpdate);
+                StartTelemetry(onAltitudeUpdate);
             }
 
             return new FlashResult
@@ -438,7 +439,7 @@ public class ArduPilotDriver : IAutopilotDriver
 
             if (onAltitudeUpdate != null)
             {
-                await StartTelemetryAsync(onAltitudeUpdate);
+                StartTelemetry(onAltitudeUpdate);
             }
 
             return new EraseResult { Success = true };
@@ -694,7 +695,7 @@ public class ArduPilotDriver : IAutopilotDriver
 
             if (onAltitudeUpdate != null)
             {
-                await StartTelemetryAsync(onAltitudeUpdate);
+                StartTelemetry(onAltitudeUpdate);
             }
 
             return new ParameterUploadResult
@@ -889,7 +890,7 @@ public class ArduPilotDriver : IAutopilotDriver
 
             if (onAltitudeUpdate != null)
             {
-                await StartTelemetryAsync(onAltitudeUpdate);
+                StartTelemetry(onAltitudeUpdate);
             }
 
             return new BootloaderUpdateResult
@@ -939,45 +940,76 @@ public class ArduPilotDriver : IAutopilotDriver
         }
     }
 
-    public async Task StartTelemetryAsync(Action<float> onAltitude)
+    public void StartTelemetry(Action<float> onAltitude)
     {
-        await StopTelemetryAsync();
+        StopTelemetrySync();
         onAltitudeUpdate = onAltitude;
         telemetryCts = new CancellationTokenSource();
+        var token = telemetryCts.Token;
+
         telemetryTask = Task.Run(async () =>
         {
-            await telemetry.ReadTelemetryLoopAsync(alt =>
+            try
             {
-                if (session != null)
-                {
-                    session.LastAltitude = alt;
-                    session.LastTelemetryAt = DateTime.UtcNow;
-                }
-                onAltitudeUpdate?.Invoke(alt);
-            }, telemetryCts.Token);
+                await telemetry.ReadTelemetryLoopAsync(
+                    alt =>
+                    {
+                        if (session != null)
+                        {
+                            session.LastAltitude = alt;
+                            session.LastTelemetryAt = DateTime.UtcNow;
+                        }
+                        onAltitudeUpdate?.Invoke(alt);
+                    },
+                    () => onDeviceDisconnected?.Invoke(),
+                    token);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Telemetry loop error: {ex.Message}");
+            }
         });
+    }
+
+    private void StopTelemetrySync()
+    {
+        if (telemetryCts is null) return;
+
+        telemetryCts.Cancel();
+
+        if (telemetryTask is not null)
+        {
+            try
+            {
+                telemetryTask.Wait(3000);
+            }
+            catch { }
+        }
+
+        telemetryCts.Dispose();
+        telemetryCts = null;
+        telemetryTask = null;
+
+        if (port.IsOpen)
+            port.Flush();
     }
 
     public async Task StopTelemetryAsync()
     {
-        var cts = telemetryCts;
-        var task = telemetryTask;
-        if (cts is null)
+        if (telemetryCts is null) return;
+
+        telemetryCts.Cancel();
+
+        if (telemetryTask is not null)
         {
-            return;
+            try
+            {
+                await telemetryTask.WaitAsync(TimeSpan.FromSeconds(3));
+            }
+            catch { }
         }
 
-        cts.Cancel();
-
-        try
-        {
-            await task?.WaitAsync(TimeSpan.FromSeconds(5));
-        }
-        catch (AggregateException)
-        {  
-        }
-
-        cts.Dispose();
+        telemetryCts.Dispose();
         telemetryCts = null;
         telemetryTask = null;
 
@@ -985,6 +1017,11 @@ public class ArduPilotDriver : IAutopilotDriver
         {
             port.Flush();
         }
+    }
+
+    public void SetDisconnectCallback(Action onDisconnected)
+    {
+        onDeviceDisconnected = onDisconnected;
     }
 
     /// <summary>
