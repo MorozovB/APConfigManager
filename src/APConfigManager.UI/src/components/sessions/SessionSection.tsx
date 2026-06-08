@@ -334,7 +334,7 @@ export const SessionSection = ({ index }: Props) => {
           />
         </div>
         <AltitudeDisplay altitude={session.altitude} />
-        <AccelerometerWidget data={session.isConnected ? accelData : []} />
+        {/*<AccelerometerWidget data={session.isConnected ? accelData : []} />*/}
       </div>
 
       <div>
@@ -349,10 +349,17 @@ export const SessionSection = ({ index }: Props) => {
         <LogConsole entries={logEntries} visible={showLogs} />
       </div>
 
-      {(session.error || orchestrator.error) && (
-        <Text size={200} style={{ color: '#ff7675' }}>
-          {session.error || orchestrator.error}
-        </Text>
+      {session.error && (
+        <div style={{
+          padding: '8px 12px',
+          borderRadius: '4px',
+          backgroundColor: session.error.includes('disconnected') ? '#35120e' : undefined,
+          border: session.error.includes('disconnected') ? '1px solid #ff767544' : undefined,
+        }}>
+          <Text size={200} style={{ color: '#ff7675' }}>
+            {session.error}
+          </Text>
+        </div>
       )}
     </div>
   );

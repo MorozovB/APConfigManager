@@ -28,7 +28,7 @@ export const useActiveSessions = () => {
     };
 
     check();
-    const interval = setInterval(check, 1000);
+    const interval = setInterval(check, 500);
 
     return () => {
       cancelled = true;
