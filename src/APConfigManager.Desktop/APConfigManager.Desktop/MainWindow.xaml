@@ -3,17 +3,21 @@
     x:Class="APConfigManager.Desktop.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:local="using:APConfigManager.Desktop"
-    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    mc:Ignorable="d"
-    Title="APConfigManager.Desktop">
-
-    <Window.SystemBackdrop>
-        <MicaBackdrop />
-    </Window.SystemBackdrop>
+    Title="AP Configuration Manager">
 
     <Grid>
+        <WebView2 x:Name="WebView" />
 
+        <Grid x:Name="LoadingOverlay" Background="#1a1a2e">
+            <StackPanel VerticalAlignment="Center"
+                        HorizontalAlignment="Center"
+                        Spacing="16">
+                <ProgressRing IsActive="True" Width="48" Height="48" />
+                <TextBlock Text="Loading AP Configuration Manager..."
+                           Foreground="White"
+                           FontSize="16"
+                           HorizontalAlignment="Center" />
+            </StackPanel>
+        </Grid>
     </Grid>
 </Window>

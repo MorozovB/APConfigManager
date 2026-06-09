@@ -48,5 +48,11 @@
 
     <Capabilities>
         <Capability Name="internetClient" />
+        <rescap:Capability Name="broadFileSystemAccess" />
+        <DeviceCapability Name="serialcommunication">
+            <Device Id="any">
+                <Function Type="name:serialPort" />
+            </Device>
+        </DeviceCapability>
     </Capabilities>
 </Package>

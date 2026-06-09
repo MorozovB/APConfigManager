@@ -8,6 +8,7 @@ using APConfigManager.Infrastructure.Drivers.Ardupilot;
 using APConfigManager.Infrastructure.Parsers;
 using APConfigManager.Infrastructure.Services;
 using APConfigManager.Infrastructure.Transport;
+using Microsoft.Extensions.FileProviders;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -98,8 +99,77 @@ if (app.Environment.IsDevelopment())
 app.UseCors("AllowLocalhost");
 app.UseRouting();
 
+var uiPath = FindUiPath(app.Environment);
+if (uiPath is not null)
+{
+    app.UseDefaultFiles(new DefaultFilesOptions
+    {
+        FileProvider = new PhysicalFileProvider(uiPath)
+    });
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new PhysicalFileProvider(uiPath)
+    });
+}
+
+if (uiPath is not null)
+{
+    app.MapFallback(async context =>
+    {
+        var requestPath = context.Request.Path.Value ?? string.Empty;
+        if (!HttpMethods.IsGet(context.Request.Method) ||
+            requestPath.StartsWith("/api", StringComparison.OrdinalIgnoreCase) ||
+            requestPath.StartsWith("/hubs", StringComparison.OrdinalIgnoreCase))
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+
+        context.Response.ContentType = "text/html";
+        await context.Response.SendFileAsync(Path.Combine(uiPath, "index.html"));
+    });
+}
+
 // ─── Endpoints ──────────────────────────────────
 app.MapControllers();
 app.MapHub<DeviceHub>("/hubs/device");
 
 await app.RunAsync();
+
+
+static string? FindUiPath(IHostEnvironment environment)
+{
+    return EnumerateUiPathCandidates(environment)
+        .FirstOrDefault(path => Directory.Exists(path) && File.Exists(Path.Combine(path, "index.html")));
+}
+
+static IEnumerable<string> EnumerateUiPathCandidates(IHostEnvironment environment)
+{
+    var candidatePaths = new[]
+    {
+        Path.Combine(AppContext.BaseDirectory, "wwwroot"),
+        Path.Combine(environment.ContentRootPath, "wwwroot"),
+        FindSourceUiDistPath(AppContext.BaseDirectory),
+        FindSourceUiDistPath(environment.ContentRootPath)
+    };
+
+    return candidatePaths
+        .Where(path => !string.IsNullOrWhiteSpace(path))
+        .Cast<string>()
+        .Distinct(StringComparer.OrdinalIgnoreCase);
+}
+
+static string? FindSourceUiDistPath(string startDirectory)
+{
+    var dir = new DirectoryInfo(startDirectory);
+    while (dir is not null)
+    {
+        var path = Path.Combine(dir.FullName, "src", "APConfigManager.UI", "dist");
+        if (Directory.Exists(path))
+            return path;
+
+        dir = dir.Parent;
+    }
+
+    return null;
+}

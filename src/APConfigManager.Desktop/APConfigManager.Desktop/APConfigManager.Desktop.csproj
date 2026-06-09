@@ -31,5 +31,31 @@
     <PublishReadyToRun Condition="'$(Configuration)' != 'Debug'">True</PublishReadyToRun>
     <PublishTrimmed Condition="'$(Configuration)' == 'Debug'">False</PublishTrimmed>
     <PublishTrimmed Condition="'$(Configuration)' != 'Debug'">True</PublishTrimmed>
+
+    <WindowsPackageType>None</WindowsPackageType>
+    <EnableMsixTooling>false</EnableMsixTooling>
+    <ReactProjectPath>$(MSBuildThisFileDirectory)..\..\APConfigManager.UI\</ReactProjectPath>
+    <ReactDistPath>$(ReactProjectPath)dist\</ReactDistPath>
   </PropertyGroup>
+
+  <Target Name="BuildReactApp" BeforeTargets="Build" Condition="Exists('$(ReactProjectPath)package.json')">
+    <Exec WorkingDirectory="$(ReactProjectPath)" Command="npm ci" Condition="!Exists('$(ReactProjectPath)node_modules')" />
+    <Exec WorkingDirectory="$(ReactProjectPath)" Command="npm run build" />
+  </Target>
+
+  <Target Name="CopyReactBuild" AfterTargets="Build" Condition="Exists('$(ReactDistPath)')">
+    <ItemGroup>
+      <ReactFiles Include="$(ReactDistPath)**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(ReactFiles)"
+          DestinationFiles="@(ReactFiles->'$(OutDir)wwwroot\%(RecursiveDir)%(Filename)%(Extension)')" />
+  </Target>
+
+  <Target Name="CopyReactBuildToPublish" AfterTargets="Publish" Condition="Exists('$(ReactDistPath)') And '$(PublishDir)' != ''">
+    <ItemGroup>
+      <ReactPublishFiles Include="$(ReactDistPath)**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(ReactPublishFiles)"
+          DestinationFiles="@(ReactPublishFiles->'$(PublishDir)wwwroot\%(RecursiveDir)%(Filename)%(Extension)')" />
+  </Target>
 </Project>

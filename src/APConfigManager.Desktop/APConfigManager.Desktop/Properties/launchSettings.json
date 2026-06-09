@@ -1,7 +1,7 @@
 {
   "profiles": {
     "APConfigManager.Desktop": {
-      "commandName": "MsixPackage"
+      "commandName": "Project"
     }
   }
 }
