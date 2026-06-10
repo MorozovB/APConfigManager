@@ -143,6 +143,7 @@ public class ArduPilotDriver : IAutopilotDriver
             try
             {
                 var bootMessages = await telemetry.ReadBootMessagesAsync(3000, ct);
+
                 foreach (var msg in bootMessages)
                 {
                     // ArduPilot format: "ArduPlane V4.5.5-beta1 (2ff5b966)"
@@ -247,12 +248,6 @@ public class ArduPilotDriver : IAutopilotDriver
         currentMode = BootMode.Normal;
         UpdateSessionPortAndState(targetPort, DeviceState.Connected);
 
-        //if (onAltitudeUpdate != null)
-        //{
-        //    StartTelemetry(onAltitudeUpdate);
-        //}
-
-
         try
         {
             var fwVer = await telemetry.GetFirmwareVersionAsync(ct);
@@ -271,13 +266,6 @@ public class ArduPilotDriver : IAutopilotDriver
     /// Retrieves device information from the bootloader.
     /// Switches to bootloader mode if not already in it.
     /// </summary>
-    //public async Task<DeviceInfo> GetDeviceInfoAsync(CancellationToken ct)
-    //{
-    //    EnsureConnected();
-    //    await EnsureModeAsync(BootMode.Bootloader, ct);
-    //    return await this.bootloader.GetDeviceInfoAsync(ct);
-    //}
-
     public async Task<DeviceInfo> GetDeviceInfoAsync(CancellationToken ct)
     {
         EnsureConnected();
@@ -311,7 +299,6 @@ public class ArduPilotDriver : IAutopilotDriver
         ArgumentNullException.ThrowIfNull(firmware);
         ArgumentNullException.ThrowIfNull(progress);
         EnsureConnected();
-        // await EnsureModeAsync(BootMode.Bootloader, ct);
 
         try
         {
@@ -360,6 +347,7 @@ public class ArduPilotDriver : IAutopilotDriver
 
                 var percent = (int)(80.0 * bytesWritten / totalBytes);
                 var prevPercent = (int)(80.0 * (bytesWritten - size) / totalBytes);
+
                 if (percent > prevPercent)
                 {
                     progress.Report((percent, $"Writing {bytesWritten}/{totalBytes}"));
@@ -419,7 +407,6 @@ public class ArduPilotDriver : IAutopilotDriver
 
         ArgumentNullException.ThrowIfNull(progress);
         EnsureConnected();
-        //await EnsureModeAsync(BootMode.Bootloader, ct);
 
         try
         {
@@ -923,10 +910,8 @@ public class ArduPilotDriver : IAutopilotDriver
 
         session = null;
         currentMode = BootMode.Normal;
-       // return Task.CompletedTask;
     }
 
-    /// <inheritdoc />
     public DeviceSession? GetCurrentSession() => session;
 
     /// <summary>
@@ -1045,30 +1030,6 @@ public class ArduPilotDriver : IAutopilotDriver
             throw new DeviceConnectionException(
                 rebootResult.ErrorMessage ?? $"Cannot switch to {mode} mode.");
         }
-    }
-
-    /// <summary>
-    /// Updates the session state, preserving all other fields.
-    /// </summary>
-    private void UpdateSessionState(DeviceState state)
-    {
-        if (session is null)
-        {
-            return;
-        }
-
-        session = new DeviceSession
-        {
-            Id = session.Id,
-            Port = session.Port,
-            BaudRate = session.BaudRate,
-            State = state,
-            ConnectedAt = session.ConnectedAt,
-            DeviceSerial = session.DeviceSerial,
-            FirmwareVersion = session.FirmwareVersion,
-            FirmwareDescription = session.FirmwareDescription,
-            BootloaderRevision = session.BootloaderRevision
-        };
     }
 
     /// <summary>
