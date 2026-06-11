@@ -209,9 +209,12 @@ export const SessionSection = ({ index }: Props) => {
       display: 'flex',
       flexDirection: 'column',
       gap: '12px',
+
+      maxHeight: 'calc((100vh - 120px) / 4)',
+      overflow: 'hidden',
     }}>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0, gap: '12px', flexWrap: 'wrap' }}>
 
         <Switch
           checked={enabled}
@@ -250,7 +253,7 @@ export const SessionSection = ({ index }: Props) => {
 
       {/*<DeviceInfoPanel session={session.data} visible={session.isConnected} />*/}
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0, gap: '12px', flexWrap: 'wrap' }}>
         <ProfileSelector
           profiles={profiles}
           selectedProfileId={selectedProfileId}
@@ -277,7 +280,7 @@ export const SessionSection = ({ index }: Props) => {
         </Tooltip>
       </div>
 
-      <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+      <div style={{ display: 'flex', gap: '12px', alignItems: "stretch", flex: 1, overflowY: 'auto', paddingRight: 4, minHeight: 0, }}>
         <div style={{ flex: 1 }}>
           {showCompletedResults && (
             <div style={{
