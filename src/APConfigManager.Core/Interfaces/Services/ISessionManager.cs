@@ -43,5 +43,11 @@ namespace APConfigManager.Core.Interfaces.Services
         /// which will update the session's telemetry data in real-time.
         /// </summary>
         void SetTelemetryCallback(Guid sessionId, Action<float> onAltitude);
+
+        /// <summary>
+        /// List of all occupied ports by active sessions, optionally excluding a specific session
+        /// (useful for checking port availability when updating a session).
+        /// </summary>
+        List<string> GetOccupiedPorts(Guid? excludeSessionId = null);
     }
 }

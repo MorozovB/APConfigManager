@@ -18,7 +18,7 @@ import { useDeviceSession } from '../../hooks/useDeviceSession';
 import { useProfiles } from '../../hooks/useProfiles';
 import { useSessionOrchestrator } from '../../hooks/useSessionOrchestrator';
 import { useProfileFiles } from '../../hooks/useProfileFiles';
-import { useMockAccelerometer } from '../device/AccelerometerWidget';
+// import { useMockAccelerometer } from '../device/AccelerometerWidget';
 
 import { PortSelector } from '../common/PortSelector';
 import { ProfileSelector } from '../common/ProfileSelector';
@@ -27,7 +27,7 @@ import { LogConsole, LogEntry } from '../common/LogConsole';
 import { DeviceStatusBadge } from '../device/DeviceStatusBadge';
 import { DeviceInfoPanel } from '../device/DeviceInfoPanel';
 import { AltitudeDisplay } from '../device/AltitudeDisplay';
-import { AccelerometerWidget } from '../device/AccelerometerWidget';
+// import { AccelerometerWidget } from '../device/AccelerometerWidget';
 
 interface Props {
   index: number;
@@ -47,7 +47,7 @@ export const SessionSection = ({ index }: Props) => {
   const { profiles } = useProfiles();
   const orchestrator = useSessionOrchestrator();
   const { getFiles, loadFromServer } = useProfileFiles();
-  const accelData = useMockAccelerometer();
+  // const accelData = useMockAccelerometer();
 
   const addLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
     const timestamp = new Date().toLocaleTimeString();

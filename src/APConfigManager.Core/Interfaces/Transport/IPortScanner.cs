@@ -41,6 +41,11 @@ namespace APConfigManager.Core.Interfaces.Transport
         /// <summary>
         /// Waits for a MAVLink port belonging to the specified device (by USB serial) to appear after reboot.
         /// </summary>
-        Task<string?> WaitForMavlinkPortAsync(string deviceSerial, List<string> portsBefore, TimeSpan timeOut, CancellationToken ct);
+        Task<string?> WaitForMavlinkPortAsync(
+            string deviceSerial,
+            List<string> portsBefore,
+            List<string> excludePorts,
+            TimeSpan timeOut,
+            CancellationToken ct);
     }
 }

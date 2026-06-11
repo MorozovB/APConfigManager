@@ -22,6 +22,7 @@ public class ArduPilotDriver : IAutopilotDriver
     private const int PortSwitchTimeoutSeconds = 20;
     private const int WriteParamsPasses = 3;
     private Action? onDeviceDisconnected;
+    private readonly Func<Guid?, List<string>>? getOccupiedPorts;
 
     private static readonly HashSet<string> ReadOnlyPrefixes = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -105,12 +106,14 @@ public class ArduPilotDriver : IAutopilotDriver
         ISerialPortAdapter port,
         IBootloaderProtocol bootloaderProtocol,
         ITelemetryProtocol telemetryProtocol,
-        IPortScanner portScanner)
+        IPortScanner portScanner,
+        Func<Guid?, List<string>>? getOccupiedPorts = null)
     {
         this.port = port;
         this.bootloader = bootloaderProtocol;
         this.telemetry = telemetryProtocol;
         this.portScanner = portScanner;
+        this.getOccupiedPorts = getOccupiedPorts;
     }
 
     /// <summary>
@@ -208,30 +211,49 @@ public class ArduPilotDriver : IAutopilotDriver
     /// </summary>
     private async Task ReconnectAfterBootAsync(CancellationToken ct)
     {
+        var oldPort = session!.Port;
+        var oldSerial = session.DeviceSerial;
+        Console.WriteLine($"Reconnect: closing {oldPort}, serial='{oldSerial}'");
+
         port.Close();
+        await Task.Delay(2000, ct);
 
         var portsAfterBoot = portScanner.GetAvailablePorts();
-        string? targetPort;
+        var excludePorts = getOccupiedPorts?.Invoke(session.Id) ?? new List<string>();
 
-        if (!string.IsNullOrWhiteSpace(session!.DeviceSerial))
+        Console.WriteLine($"Reconnect: ports={string.Join(",", portsAfterBoot)}, exclude={string.Join(",", excludePorts)}");
+
+        string? targetPort = null;
+
+        if (!string.IsNullOrWhiteSpace(oldSerial))
         {
             targetPort = await portScanner.WaitForMavlinkPortAsync(
-                session.DeviceSerial,
+                oldSerial,
                 portsAfterBoot,
+                excludePorts,
                 TimeSpan.FromSeconds(PortSwitchTimeoutSeconds),
                 ct);
+
+            Console.WriteLine($"Reconnect: by serial '{oldSerial}' → {targetPort ?? "null"}");
         }
-        else
+
+        if (string.IsNullOrWhiteSpace(targetPort))
         {
             targetPort = await portScanner.WaitForNewPortAsync(
                 portsAfterBoot,
                 TimeSpan.FromSeconds(PortSwitchTimeoutSeconds),
                 ct);
+
+            Console.WriteLine($"Reconnect: by new port → {targetPort ?? "null"}");
         }
 
         if (string.IsNullOrWhiteSpace(targetPort))
-            targetPort = session.Port;
+        {
+            targetPort = oldPort;
+            Console.WriteLine($"Reconnect: fallback to original {oldPort}");
+        }
 
+        Console.WriteLine($"Reconnect: opening {targetPort}");
         port.Open(targetPort, session.BaudRate);
         port.Flush();
 
@@ -240,23 +262,42 @@ public class ArduPilotDriver : IAutopilotDriver
             await telemetry.SendHeartbeatAsync(ct);
             await WaitForDeviceHeartbeatAsync(ct);
         }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Reconnect: heartbeat failed on {targetPort}: {ex.Message}");
+        }
+
+        try
+        {
+            var fwVer = await telemetry.GetFirmwareVersionAsync(ct);
+            if (session != null && !string.IsNullOrWhiteSpace(fwVer))
+            {
+                session.FirmwareVersion = fwVer;
+                Console.WriteLine($"Reconnect: firmware version = {fwVer}");
+            }
+        }
         catch
         {
-            // Device might need more time to start MAVLink
+            Console.WriteLine("Reconnect: could not read firmware version");
+        }
+
+        var newPortInfo = portScanner.GetPortDescription(targetPort);
+        Console.WriteLine($"Reconnect: new port serial='{newPortInfo?.DeviceSerial}', desc='{newPortInfo?.Description}'");
+
+        if (newPortInfo != null
+            && !string.IsNullOrWhiteSpace(oldSerial)
+            && !string.IsNullOrWhiteSpace(newPortInfo.DeviceSerial)
+            && newPortInfo.DeviceSerial != oldSerial)
+        {
+            Console.WriteLine($"Reconnect: SERIAL MISMATCH! expected='{oldSerial}', got='{newPortInfo.DeviceSerial}'");
         }
 
         currentMode = BootMode.Normal;
         UpdateSessionPortAndState(targetPort, DeviceState.Connected);
 
-        try
+        if (newPortInfo != null && !string.IsNullOrWhiteSpace(newPortInfo.DeviceSerial))
         {
-            var fwVer = await telemetry.GetFirmwareVersionAsync(ct);
-            if (session != null)
-                session.FirmwareVersion = fwVer;
-        }
-        catch
-        {
-            // Skip if version query fails
+            session.DeviceSerial = newPortInfo.DeviceSerial;
         }
 
         Console.WriteLine($"Reconnected on {targetPort}");

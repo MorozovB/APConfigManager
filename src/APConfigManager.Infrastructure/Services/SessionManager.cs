@@ -154,6 +154,14 @@ public class SessionManager : ISessionManager, IAsyncDisposable
         sessions[sessionId] = current;
     }
 
+    public List<string> GetOccupiedPorts(Guid? excludeSessionId = null)
+    {
+        return sessions.Values
+            .Where(s => excludeSessionId == null || s.Id != excludeSessionId)
+            .Select(s => s.Port)
+            .ToList();
+    }
+
     /// <summary>
     /// Closes all active sessions and releases resources.
     /// </summary>

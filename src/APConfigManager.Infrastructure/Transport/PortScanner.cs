@@ -207,15 +207,15 @@ namespace APConfigManager.Infrastructure.Transport
         /// Uses USB serial number for device identification.
         /// </summary>
         public async Task<string?> WaitForMavlinkPortAsync(
-            string deviceSerial,
-            List<string> portsBefore,
-            TimeSpan timeout,
-            CancellationToken ct)
+    string deviceSerial,
+    List<string> portsBefore,
+    List<string> excludePorts,
+    TimeSpan timeout,
+    CancellationToken ct)
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cts.CancelAfter(timeout);
 
-            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
             var hasSerial = !string.IsNullOrWhiteSpace(deviceSerial);
 
             try
@@ -224,58 +224,40 @@ namespace APConfigManager.Infrastructure.Transport
                 {
                     await Task.Delay(500, cts.Token);
 
-                    var current = GetAvailablePortsDetailed();
-                    var elapsed = stopwatch.ElapsedMilliseconds;
+                    var current = GetAvailablePortsDetailed()
+                        .Where(p => !excludePorts.Contains(p.Name))
+                        .ToList();
 
                     if (hasSerial)
                     {
-                        // Priority 1: same serial + Mavlink + new port
-                        var ideal = current.FirstOrDefault(p =>
+                        var bySerial = current.FirstOrDefault(p =>
                             p.DeviceSerial == deviceSerial
                             && p.IsMavlink
                             && !portsBefore.Contains(p.Name));
 
-                        if (ideal is not null)
-                            return ideal.Name;
+                        if (bySerial is not null)
+                            return bySerial.Name;
 
-                        // Priority 2: same serial + Mavlink (port name might be reused)
-                        var sameDevice = current.FirstOrDefault(p =>
+                        var sameSerial = current.FirstOrDefault(p =>
                             p.DeviceSerial == deviceSerial
                             && p.IsMavlink);
 
-                        if (sameDevice is not null)
-                            return sameDevice.Name;
-
-                        // Priority 3: same serial, any port (no Mavlink filter)
-                        if (elapsed > 3000)
-                        {
-                            var anySerial = current.FirstOrDefault(p =>
-                                p.DeviceSerial == deviceSerial
-                                && !portsBefore.Contains(p.Name));
-
-                            if (anySerial is not null)
-                                return anySerial.Name;
-                        }
+                        if (sameSerial is not null)
+                            return sameSerial.Name;
                     }
 
-                    // Fallback (after 3 seconds or no serial)
-                    if (!hasSerial || elapsed > 3000)
-                    {
-                        // Priority 4: any new port with Mavlink
-                        var anyMavlink = current.FirstOrDefault(p =>
-                            p.IsMavlink
-                            && !portsBefore.Contains(p.Name));
+                    var newMavlink = current.FirstOrDefault(p =>
+                        p.IsMavlink
+                        && !portsBefore.Contains(p.Name));
 
-                        if (anyMavlink is not null)
-                            return anyMavlink.Name;
+                    if (newMavlink is not null)
+                        return newMavlink.Name;
 
-                        // Priority 5: any new port
-                        var anyNew = current.FirstOrDefault(p =>
-                            !portsBefore.Contains(p.Name));
+                    var anyNew = current.FirstOrDefault(p =>
+                        !portsBefore.Contains(p.Name));
 
-                        if (anyNew is not null)
-                            return anyNew.Name;
-                    }
+                    if (anyNew is not null)
+                        return anyNew.Name;
                 }
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
