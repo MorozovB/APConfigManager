@@ -50,13 +50,13 @@ export const ToolsPage = () => {
     if (!session.sessionId) return;
 
     setEraseStatus({ message: 'Erasing...', type: 'info' });
-    await eraseOp.execute(session.sessionId);
+    const result = await eraseOp.execute(session.sessionId);
 
-    if (eraseOp.result?.success) {
+    if (result?.success) {
       setEraseStatus({ message: 'Firmware erased successfully', type: 'success' });
     } else {
       setEraseStatus({
-        message: eraseOp.error || eraseOp.result?.message || 'Erase failed',
+        message: eraseOp.error || result?.message || 'Erase failed',
         type: 'error',
       });
     }
@@ -106,11 +106,6 @@ export const ToolsPage = () => {
       title: 'Reset Parameters',
       message: 'This will reset ALL parameters to factory defaults. Custom settings will be lost. The device will reboot. Continue?',
       confirmText: 'Reset',
-    },
-    recoverBootloader: {
-      title: 'Recover Bootloader',
-      message: 'This will attempt to connect to a device with a custom bootloader and restore the standard ArduPilot bootloader. Continue?',
-      confirmText: 'Recover',
     },
   };
 
@@ -186,7 +181,7 @@ export const ToolsPage = () => {
         <ToolCard
           icon={<EraserRegular />}
           title="Erase Firmware"
-          description="Completely erase the firmware from the device flash memory. The device will enter bootloader mode and will not boot until new firmware is flashed."
+          description="Completely erase the firmware from the device flash memory."
           buttonText="Erase"
           buttonColor="#d63031"
           onClick={handleEraseClick}
@@ -199,7 +194,7 @@ export const ToolsPage = () => {
         <ToolCard
           icon={<ArrowResetRegular />}
           title="Reset Parameters"
-          description="Reset all autopilot parameters to factory defaults. This will undo any custom configuration. The device will reboot to apply changes."
+          description="Reset all autopilot parameters to factory defaults."
           buttonText="Reset to Defaults"
           buttonColor="#e17055"
           onClick={handleResetClick}
@@ -208,19 +203,6 @@ export const ToolsPage = () => {
           statusMessage={resetStatus?.message}
           statusType={resetStatus?.type}
         />
-
-        {/*<ToolCard*/}
-        {/*  icon={<WrenchRegular />}*/}
-        {/*  title="Recover Bootloader"*/}
-        {/*  description="Restore the standard ArduPilot bootloader on a device that has a custom bootloader installed. Use this if the device is not recognized by standard tools."*/}
-        {/*  buttonText="Recover"*/}
-        {/*  buttonColor="#636e72"*/}
-        {/*  onClick={handleRecoverBootloader}*/}
-        {/*  disabled={isBusy}*/}
-        {/*  loading={false}*/}
-        {/*  statusMessage={blRecoverStatus?.message}*/}
-        {/*  statusType={blRecoverStatus?.type}*/}
-        {/*/>*/}
 
       </div>
 

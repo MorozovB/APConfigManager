@@ -15,8 +15,11 @@ export const useEraseOperation = () => {
     try {
       const data = await startErase(sessionId);
       setResult(data);
+      return data;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erase failed');
+      const message = err instanceof Error ? err.message : 'Erase failed';
+      setError(message);
+      return null;
     } finally {
       setIsRunning(false);
     }
