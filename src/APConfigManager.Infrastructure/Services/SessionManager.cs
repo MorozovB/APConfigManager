@@ -16,6 +16,7 @@ public class SessionManager : ISessionManager, IAsyncDisposable
 
     private readonly Dictionary<Guid, DeviceSession> sessions = new();
     private readonly Dictionary<Guid, IAutopilotDriver> drivers = new();
+    private readonly object _stateLock = new();
     private readonly SemaphoreSlim _lock = new(1, 1);
     private readonly Func<IAutopilotDriver> driverFactory;
     private readonly Dictionary<Guid, Action<float>> telemetryCallbacks = new();
@@ -34,35 +35,35 @@ public class SessionManager : ISessionManager, IAsyncDisposable
     /// Throws SessionException if port is already in use or session limit reached.
     /// Connects to the device and adds the session to the active list.
     /// </summary>
-    public async Task<DeviceSession> CreateSessionAsync(
-        string port,
-        int baudRate,
-        CancellationToken ct)
+    public async Task<DeviceSession> CreateSessionAsync(string port, int baudRate, CancellationToken ct)
     {
         await _lock.WaitAsync(ct);
-
         try
         {
-            if (sessions.Count >= MaxSessions)
+            lock (_stateLock)
             {
-                throw new SessionException(
-                    $"Maximum of {MaxSessions} concurrent sessions reached.");
-            }
+                if (sessions.Count >= MaxSessions)
+                {
+                    throw new SessionException($"Maximum of {MaxSessions} concurrent sessions reached.");
+                }
 
-            var portInUse = sessions.Values.Any(s =>
-                s.Port.Equals(port, StringComparison.OrdinalIgnoreCase));
+                var portInUse = sessions.Values.Any(s =>
+                    s.Port.Equals(port, StringComparison.OrdinalIgnoreCase));
 
-            if (portInUse)
-            {
-                throw new SessionException(
-                    $"Port {port} is already in use by another session.");
+                if (portInUse)
+                {
+                    throw new SessionException($"Port {port} is already in use by another session.");
+                }
             }
 
             var driver = this.driverFactory();
             var session = await driver.ConnectAsync(port, baudRate, ct);
 
-            sessions[session.Id] = session;
-            drivers[session.Id] = driver;
+            lock (_stateLock)
+            {
+                sessions[session.Id] = session;
+                drivers[session.Id] = driver;
+            }
 
             return session;
         }
@@ -77,8 +78,11 @@ public class SessionManager : ISessionManager, IAsyncDisposable
     /// </summary>
     public DeviceSession? GetSession(Guid sessionId)
     {
-        sessions.TryGetValue(sessionId, out var session);
-        return session;
+        lock (_stateLock)
+        {
+            sessions.TryGetValue(sessionId, out var session);
+            return session;
+        }
     }
 
     /// <summary>
@@ -86,7 +90,10 @@ public class SessionManager : ISessionManager, IAsyncDisposable
     /// </summary>
     public List<DeviceSession> GetAllSessions()
     {
-        return sessions.Values.ToList();
+        lock (_stateLock)
+        {
+            return sessions.Values.ToList();
+        }
     }
 
     /// <summary>
@@ -96,19 +103,24 @@ public class SessionManager : ISessionManager, IAsyncDisposable
     public async Task CloseSessionAsync(Guid sessionId)
     {
         await _lock.WaitAsync();
-
         try
         {
-            if (!drivers.TryGetValue(sessionId, out var driver))
+            IAutopilotDriver? driver;
+            lock (_stateLock)
             {
-                throw new SessionException(
-                    $"Session {sessionId} not found.");
+                if (!drivers.TryGetValue(sessionId, out driver))
+                {
+                    throw new SessionException($"Session {sessionId} not found.");
+                }
             }
 
             await driver.DisconnectAsync();
 
-            drivers.Remove(sessionId);
-            sessions.Remove(sessionId);
+            lock (_stateLock)
+            {
+                drivers.Remove(sessionId);
+                sessions.Remove(sessionId);
+            }
         }
         finally
         {
@@ -122,27 +134,38 @@ public class SessionManager : ISessionManager, IAsyncDisposable
     /// </summary>
     public IAutopilotDriver GetDriver(Guid sessionId)
     {
-        if (!drivers.TryGetValue(sessionId, out var driver))
+        lock (_stateLock)
         {
-            throw new SessionException(
-                $"Session {sessionId} not found.");
-        }
+            if (!drivers.TryGetValue(sessionId, out var driver))
+            {
+                throw new SessionException($"Session {sessionId} not found.");
+            }
 
-        return driver;
+            return driver;
+        }
     }
 
     public void SetTelemetryCallback(Guid sessionId, Action<float> onAltitude)
     {
-        telemetryCallbacks[sessionId] = onAltitude;
-        if (drivers.TryGetValue(sessionId, out var driver))
-            driver.StartTelemetry(onAltitude);
+        IAutopilotDriver? driver;
+        lock (_stateLock)
+        {
+            telemetryCallbacks[sessionId] = onAltitude;
+            drivers.TryGetValue(sessionId, out driver);
+        }
+
+        driver?.StartTelemetry(onAltitude);
     }
 
     public void SyncSessionFromDriver(Guid sessionId)
     {
-        if (!drivers.TryGetValue(sessionId, out var driver))
+        IAutopilotDriver? driver;
+        lock (_stateLock)
         {
-            return;
+            if (!drivers.TryGetValue(sessionId, out driver))
+            {
+                return;
+            }
         }
 
         var current = driver.GetCurrentSession();
@@ -151,15 +174,21 @@ public class SessionManager : ISessionManager, IAsyncDisposable
             return;
         }
 
-        sessions[sessionId] = current;
+        lock (_stateLock)
+        {
+            sessions[sessionId] = current;
+        }
     }
 
     public List<string> GetOccupiedPorts(Guid? excludeSessionId = null)
     {
-        return sessions.Values
-            .Where(s => excludeSessionId == null || s.Id != excludeSessionId)
-            .Select(s => s.Port)
-            .ToList();
+        lock (_stateLock)
+        {
+            return sessions.Values
+                .Where(s => excludeSessionId == null || s.Id != excludeSessionId)
+                .Select(s => s.Port)
+                .ToList();
+        }
     }
 
     /// <summary>

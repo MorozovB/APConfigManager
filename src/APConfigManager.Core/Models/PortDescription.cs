@@ -16,5 +16,7 @@ namespace APConfigManager.Core.Models
         public string ProductId { get; set; } = string.Empty;
 
         public bool IsMavlink { get; set; }
+
+        public string LocationPath { get; set; } = string.Empty;
     }
 }

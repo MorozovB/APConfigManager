@@ -1,30 +1,73 @@
 using System.IO.Ports;
 using System.Management;
 using System.Text.RegularExpressions;
-using APConfigManager.Core.Exceptions;
 using APConfigManager.Core.Interfaces.Transport;
 using APConfigManager.Core.Models;
 
 namespace APConfigManager.Infrastructure.Transport
 {
-    /// <summary>
-    /// Discovers available COM ports and monitors for new port appearance.
-    /// </summary>
     public class PortScanner : IPortScanner
     {
-        /// <summary>
-        /// Returns a sorted list of available COM ports, excluding Bluetooth ports.
-        /// </summary>
         public List<string> GetAvailablePorts()
         {
             return SerialPort.GetPortNames()
-                .Where(p => !IsBluetoothPort(p, string.Empty))
-                .OrderBy(p =>
-                {
-                    var num = int.TryParse(p.Replace("COM", ""), out var n) ? n : 0;
-                    return num;
-                })
+                .OrderBy(ExtractPortNumber)
                 .ToList();
+        }
+
+        public List<PortDescription> GetAvailablePortsDetailed()
+        {
+            var result = new List<PortDescription>();
+
+            using var searcher = new ManagementObjectSearcher(
+                "SELECT * FROM Win32_PnPEntity WHERE Name LIKE '%(COM%'");
+
+            foreach (var device in searcher.Get())
+            {
+                var name = device["Name"]?.ToString() ?? "";
+                var pnpId = device["PNPDeviceID"]?.ToString() ?? "";
+
+                var m = Regex.Match(name, @"\((COM\d+)\)");
+                if (!m.Success) continue;
+
+                var portName = m.Groups[1].Value;
+                var description = Regex.Replace(name, @"\s*\(COM\d+\)\s*", "");
+
+                var vendorId = "";
+                var productId = "";
+                var serial = "";
+
+                var parts = pnpId.Split('\\');
+                if (parts.Length >= 3 && parts[0] == "USB")
+                {
+                    var vid = Regex.Match(parts[1], @"VID_([0-9A-Fa-f]+)");
+                    var pid = Regex.Match(parts[1], @"PID_([0-9A-Fa-f]+)");
+
+                    if (vid.Success) vendorId = vid.Groups[1].Value;
+                    if (pid.Success) productId = pid.Groups[1].Value;
+
+                    serial = parts[2];
+                }
+
+                result.Add(new PortDescription
+                {
+                    Name = portName,
+                    Description = description,
+                    VendorId = vendorId,
+                    ProductId = productId,
+                    DeviceSerial = serial,
+                    IsMavlink = description.Contains("Mavlink", StringComparison.OrdinalIgnoreCase),
+                    LocationPath = GetLocationPath(device)
+                });
+            }
+
+            return result.OrderBy(p => ExtractPortNumber(p.Name)).ToList();
+        }
+
+        public PortDescription? GetPortDescription(string portName)
+        {
+            return GetAvailablePortsDetailed()
+                .FirstOrDefault(p => p.Name.Equals(portName, StringComparison.OrdinalIgnoreCase));
         }
 
         public async Task<string?> WaitForNewPortAsync(
@@ -39,72 +82,28 @@ namespace APConfigManager.Infrastructure.Transport
             {
                 while (true)
                 {
-                    await Task.Delay(500, cts.Token);
+                    await Task.Delay(300, cts.Token);
 
-                    var current = GetAvailablePorts();
-                    var newPort = current.FirstOrDefault(p => !existingPorts.Contains(p));
+                    var now = GetAvailablePorts();
+                    var added = now.FirstOrDefault(p => !existingPorts.Contains(p));
 
-                    if (newPort is not null)
-                        return newPort;
+                    if (added != null)
+                        return added;
                 }
             }
-            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            catch (OperationCanceledException)
             {
-                // Timeout expired, not user cancellation
                 return null;
             }
         }
 
-        /// <summary>
-        /// Waits for a bootloader port to appear after device reboot.
-        /// </summary>
         public async Task<string?> WaitForBootloaderPortAsync(
             string originalPort,
             TimeSpan timeout,
             CancellationToken ct)
         {
-            var portsBefore = GetAvailablePorts();
-
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            cts.CancelAfter(timeout);
-
-            try
-            {
-                while (true)
-                {
-                    await Task.Delay(300, cts.Token);
-
-                    var current = GetAvailablePorts();
-
-                    // New port that didn't exist before
-                    var newPort = current.FirstOrDefault(p => !portsBefore.Contains(p));
-                    if (newPort is not null)
-                        return newPort;
-
-                    // Original port disappeared — wait for it to come back
-                    if (!current.Contains(originalPort))
-                    {
-                        while (true)
-                        {
-                            await Task.Delay(300, cts.Token);
-
-                            current = GetAvailablePorts();
-
-                            if (current.Contains(originalPort))
-                                return originalPort;
-
-                            newPort = current.FirstOrDefault(p => !portsBefore.Contains(p));
-                            if (newPort is not null)
-                                return newPort;
-                        }
-                    }
-                }
-            }
-            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-            {
-                // Timeout expired, not user cancellation
-                return null;
-            }
+            var before = GetAvailablePorts();
+            return await WaitForBootloaderPortAsync(originalPort, before, timeout, ct);
         }
 
         public async Task<string?> WaitForBootloaderPortAsync(
@@ -118,100 +117,41 @@ namespace APConfigManager.Infrastructure.Transport
 
             try
             {
-                // Wait for original port to disappear first
                 while (true)
                 {
                     await Task.Delay(300, cts.Token);
-                    var current = GetAvailablePorts();
 
-                    if (!current.Contains(originalPort))
+                    var now = GetAvailablePorts();
+                    if (!now.Contains(originalPort))
                         break;
                 }
 
-                // Now wait for a new port or original port to reappear
                 while (true)
                 {
                     await Task.Delay(300, cts.Token);
-                    var current = GetAvailablePorts();
 
-                    var newPort = current.FirstOrDefault(p => !portsBefore.Contains(p));
-                    if (newPort is not null)
+                    var now = GetAvailablePorts();
+
+                    var newPort = now.FirstOrDefault(p => !portsBefore.Contains(p));
+                    if (newPort != null)
                         return newPort;
 
-                    if (current.Contains(originalPort))
+                    if (now.Contains(originalPort))
                         return originalPort;
                 }
             }
-            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            catch (OperationCanceledException)
             {
                 return null;
             }
         }
 
-        /// <summary>
-        /// Returns available COM ports with full USB device details.
-        /// </summary>
-        public List<PortDescription> GetAvailablePortsDetailed()
-        {
-            var wmiPorts = QueryPortsFromWmi();
-
-            if (wmiPorts.Count > 0)
-            {
-                return wmiPorts
-                    .Where(p => !IsBluetoothPort(p.Name, p.Description))
-                    .ToList();
-            }
-
-            // Fallback: WMI unavailable — basic info only
-            return SerialPort.GetPortNames()
-                .Where(p => !IsBluetoothPort(p, string.Empty))
-                .OrderBy(p =>
-                {
-                    var num = int.TryParse(p.Replace("COM", ""), out var n) ? n : 0;
-                    return num;
-                })
-                .Select(p => new PortDescription
-                {
-                    Name = p,
-                    Description = string.Empty,
-                    DeviceSerial = string.Empty,
-                    VendorId = string.Empty,
-                    ProductId = string.Empty,
-                    IsMavlink = false
-                })
-                .ToList();
-        }
-
-        /// <summary>
-        /// Checks if a port is a Bluetooth serial port.
-        /// </summary>
-        private static bool IsBluetoothPort(string portName, string description)
-        {
-            var combined = $"{portName} {description}".ToUpperInvariant();
-            return combined.Contains("BLUETOOTH")
-                || combined.Contains("BT ")
-                || combined.Contains("WIRELESS");
-        }
-
-        /// <summary>
-        /// Returns USB device details for a specific COM port.
-        /// </summary>
-        public PortDescription? GetPortDescription(string portName)
-        {
-            return GetAvailablePortsDetailed()
-                .FirstOrDefault(p => p.Name.Equals(portName, StringComparison.OrdinalIgnoreCase));
-        }
-
-        /// <summary>
-        /// Waits for a MAVLink port belonging to the specified device to appear after reboot.
-        /// Uses USB serial number for device identification.
-        /// </summary>
         public async Task<string?> WaitForMavlinkPortAsync(
-    string deviceSerial,
-    List<string> portsBefore,
-    List<string> excludePorts,
-    TimeSpan timeout,
-    CancellationToken ct)
+            string deviceSerial,
+            List<string> portsBefore,
+            List<string> excludePorts,
+            TimeSpan timeout,
+            CancellationToken ct)
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cts.CancelAfter(timeout);
@@ -224,119 +164,244 @@ namespace APConfigManager.Infrastructure.Transport
                 {
                     await Task.Delay(500, cts.Token);
 
-                    var current = GetAvailablePortsDetailed()
+                    var ports = GetAvailablePortsDetailed()
                         .Where(p => !excludePorts.Contains(p.Name))
                         .ToList();
 
                     if (hasSerial)
                     {
-                        var bySerial = current.FirstOrDefault(p =>
-                            p.DeviceSerial == deviceSerial
-                            && p.IsMavlink
-                            && !portsBefore.Contains(p.Name));
+                        var bySerial = ports.FirstOrDefault(p =>
+                            p.DeviceSerial.Equals(deviceSerial, StringComparison.OrdinalIgnoreCase) &&
+                            p.IsMavlink);
 
-                        if (bySerial is not null)
+                        if (bySerial != null)
                             return bySerial.Name;
-
-                        var sameSerial = current.FirstOrDefault(p =>
-                            p.DeviceSerial == deviceSerial
-                            && p.IsMavlink);
-
-                        if (sameSerial is not null)
-                            return sameSerial.Name;
                     }
 
-                    var newMavlink = current.FirstOrDefault(p =>
-                        p.IsMavlink
-                        && !portsBefore.Contains(p.Name));
+                    var newMav = ports.FirstOrDefault(p =>
+                        p.IsMavlink && !portsBefore.Contains(p.Name));
 
-                    if (newMavlink is not null)
-                        return newMavlink.Name;
+                    if (newMav != null)
+                        return newMav.Name;
 
-                    var anyNew = current.FirstOrDefault(p =>
+                    var anyNew = ports.FirstOrDefault(p =>
                         !portsBefore.Contains(p.Name));
 
-                    if (anyNew is not null)
+                    if (anyNew != null)
                         return anyNew.Name;
                 }
             }
-            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            catch (OperationCanceledException)
             {
                 return null;
             }
         }
 
-        /// <summary>
-        /// Queries Windows Management Instrumentation for COM port details.
-        /// </summary>
-        private static List<PortDescription> QueryPortsFromWmi()
+        public async Task<string?> WaitForReconnectedPortAsync(
+            string? usbLocationPath,
+            string originalPort,
+            IReadOnlyList<string> excludePorts,
+            TimeSpan timeout,
+            CancellationToken ct)
         {
-            var result = new List<PortDescription>();
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(timeout);
+
+            Console.WriteLine($"[PortScanner] START WaitForReconnected");
+            Console.WriteLine($"[PortScanner] originalPort   = {originalPort}");
+            Console.WriteLine($"[PortScanner] usbLocation    = {usbLocationPath ?? "<null>"}");
+            Console.WriteLine($"[PortScanner] excludePorts   = [{string.Join(", ", excludePorts)}]");
+            Console.WriteLine($"[PortScanner] timeout        = {timeout}");
 
             try
             {
-                using var searcher = new ManagementObjectSearcher(
-                    "SELECT * FROM Win32_PnPEntity WHERE Name LIKE '%(COM%'");
+                // Phase 1
+                Console.WriteLine($"[PortScanner] Phase 1: waiting for {originalPort} to disappear...");
+                await WaitForPortToDisappearAsync(originalPort, cts.Token);
+                Console.WriteLine($"[PortScanner] Phase 1: {originalPort} is gone");
 
-                using var collection = searcher.Get();
-
-                foreach (var device in collection)
+                // Phase 2
+                if (!string.IsNullOrWhiteSpace(usbLocationPath))
                 {
-                    var name = device["Name"]?.ToString() ?? string.Empty;
-                    var pnpDeviceId = device["PNPDeviceID"]?.ToString() ?? string.Empty;
+                    Console.WriteLine($"[PortScanner] Phase 2: searching by LocationPath...");
+                    var result = await WaitForPortByLocationAsync(usbLocationPath, excludePorts, cts.Token);
+                    Console.WriteLine($"[PortScanner] Phase 2: found = {result ?? "<null>"}");
+                    return result;
+                }
 
-                    var portMatch = Regex.Match(name, @"\((COM\d+)\)");
-                    if (!portMatch.Success)
-                        continue;
+                Console.WriteLine($"[PortScanner] Phase 2: no LocationPath, falling back to new port scan");
+                var portsBefore = GetAvailablePorts()
+                    .Where(p => !excludePorts.Contains(p, StringComparer.OrdinalIgnoreCase))
+                    .ToList();
+                Console.WriteLine($"[PortScanner] portsBefore = [{string.Join(", ", portsBefore)}]");
 
-                    var portName = portMatch.Groups[1].Value;
+                var fallback = await WaitForNewPortAsync(portsBefore, timeout, cts.Token);
+                Console.WriteLine($"[PortScanner] fallback result = {fallback ?? "<null>"}");
+                return fallback;
+            }
+            catch (OperationCanceledException)
+            {
+                Console.WriteLine($"[PortScanner] TIMEOUT or CANCELLED");
 
-                    var description = Regex.Replace(name, @"\s*\(COM\d+\)\s*", string.Empty).Trim();
+                // Dump all ports visible at timeout moment
+                Console.WriteLine($"[PortScanner] Ports visible right now:");
+                foreach (var p in GetAvailablePortsDetailed())
+                {
+                    Console.WriteLine($"  {p.Name} | location={p.LocationPath} | desc={p.Description}");
+                }
 
-                    var vendorId = string.Empty;
-                    var productId = string.Empty;
-                    var deviceSerial = string.Empty;
+                return null;
+            }
+        }
 
-                    var pnpParts = pnpDeviceId.Split('\\');
-                    if (pnpParts.Length >= 3 && pnpParts[0].Equals("USB", StringComparison.OrdinalIgnoreCase))
-                    {
-                        var vidMatch = Regex.Match(pnpParts[1], @"VID_([0-9A-Fa-f]+)");
-                        if (vidMatch.Success)
-                            vendorId = vidMatch.Groups[1].Value;
+        public async Task<string?> WaitForPortByLocationAsync(
+            string usbLocation,
+            List<string> excludePorts,
+            TimeSpan timeout,
+            CancellationToken ct)
+        {
+            if (string.IsNullOrWhiteSpace(usbLocation))
+                return null;
 
-                        var pidMatch = Regex.Match(pnpParts[1], @"PID_([0-9A-Fa-f]+)");
-                        if (pidMatch.Success)
-                            productId = pidMatch.Groups[1].Value;
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(timeout);
 
-                        deviceSerial = pnpParts[2];
-                    }
+            try
+            {
+                while (true)
+                {
+                    await Task.Delay(300, cts.Token);
 
-                    var isMavlink = description.Contains("Mavlink", StringComparison.OrdinalIgnoreCase);
+                    var match = GetAvailablePortsDetailed()
+                        .Where(p => !excludePorts.Contains(p.Name, StringComparer.OrdinalIgnoreCase))
+                        .FirstOrDefault(p => string.Equals(
+                            p.LocationPath, usbLocation,
+                            StringComparison.OrdinalIgnoreCase));
 
-                    result.Add(new PortDescription
-                    {
-                        Name = portName,
-                        Description = description,
-                        DeviceSerial = deviceSerial,
-                        VendorId = vendorId,
-                        ProductId = productId,
-                        IsMavlink = isMavlink
-                    });
+                    if (match != null)
+                        return match.Name;
                 }
             }
-            catch (ManagementException)
+            catch (OperationCanceledException)
             {
-                // WMI unavailable — return empty, caller will fallback to SerialPort.GetPortNames()
+                return null;
             }
+        }
 
-            result.Sort((a, b) =>
+        private async Task<string?> WaitForPortByLocationAsync(
+            string usbLocation,
+            IReadOnlyList<string> excludePorts,
+            CancellationToken ct)
+        {
+            if (string.IsNullOrWhiteSpace(usbLocation))
+                return null;
+
+            while (true)
             {
-                var numA = int.TryParse(a.Name.Replace("COM", ""), out var na) ? na : 0;
-                var numB = int.TryParse(b.Name.Replace("COM", ""), out var nb) ? nb : 0;
-                return numA.CompareTo(numB);
-            });
+                var match = GetAvailablePortsDetailed()
+                    .Where(p => !excludePorts.Contains(p.Name, StringComparer.OrdinalIgnoreCase))
+                    .FirstOrDefault(p => string.Equals(
+                        p.LocationPath, usbLocation,
+                        StringComparison.OrdinalIgnoreCase));
 
-            return result;
+                if (match != null)
+                    return match.Name;
+
+                await Task.Delay(300, ct);
+            }
+        }
+
+        private async Task WaitForPortToDisappearAsync(string portName, CancellationToken ct)
+        {
+            while (true)
+            {
+                var current = GetAvailablePorts();
+
+                if (!current.Contains(portName, StringComparer.OrdinalIgnoreCase))
+                    return;
+
+                await Task.Delay(200, ct);
+            }
+        }
+
+        private static string GetLocationPath(ManagementBaseObject device)
+        {
+            try
+            {
+                var mo = (ManagementObject)device;
+                var inParams = mo.GetMethodParameters("GetDeviceProperties");
+                inParams["devicePropertyKeys"] = new[] { "DEVPKEY_Device_LocationPaths" };
+
+                using var outParams = mo.InvokeMethod("GetDeviceProperties", inParams, null);
+
+                if (outParams?["deviceProperties"] is ManagementBaseObject[] props &&
+                    props.Length > 0)
+                {
+                    if (props[0]["Data"] is string[] arr && arr.Length > 0)
+                        return arr[0];
+                }
+            }
+            catch { }
+
+            return "";
+        }
+
+        private static int ExtractPortNumber(string port)
+        {
+            var m = Regex.Match(port, @"COM(\d+)");
+            return m.Success ? int.Parse(m.Groups[1].Value) : 0;
+        }
+
+        public static void DebugPrintPorts()
+        {
+            using var searcher = new ManagementObjectSearcher(
+                "SELECT * FROM Win32_PnPEntity WHERE Name LIKE '%(COM%'");
+
+            Console.WriteLine("=== PORTS ===");
+
+            foreach (var device in searcher.Get())
+            {
+                var name = device["Name"]?.ToString() ?? "";
+                var pnp = device["PNPDeviceID"]?.ToString() ?? "";
+
+                Console.WriteLine($"Name: {name}");
+                Console.WriteLine($"PNP:  {pnp}");
+
+                try
+                {
+                    var mo = (ManagementObject)device;
+                    var inParams = mo.GetMethodParameters("GetDeviceProperties");
+                    inParams["devicePropertyKeys"] = new[] { "DEVPKEY_Device_LocationInfo" };
+
+                    using var outParams = mo.InvokeMethod("GetDeviceProperties", inParams, null);
+                    if (outParams?["deviceProperties"] is ManagementBaseObject[] props && props.Length > 0)
+                    {
+                        Console.WriteLine($"LocationInfo: {props[0]["Data"]}");
+                    }
+                }
+                catch { }
+
+                try
+                {
+                    var mo = (ManagementObject)device;
+                    var inParams = mo.GetMethodParameters("GetDeviceProperties");
+                    inParams["devicePropertyKeys"] = new[] { "DEVPKEY_Device_LocationPaths" };
+
+                    using var outParams = mo.InvokeMethod("GetDeviceProperties", inParams, null);
+                    if (outParams?["deviceProperties"] is ManagementBaseObject[] props && props.Length > 0)
+                    {
+                        if (props[0]["Data"] is string[] arr)
+                        {
+                            Console.WriteLine("LocationPaths:");
+                            foreach (var p in arr)
+                                Console.WriteLine($"  {p}");
+                        }
+                    }
+                }
+                catch { }
+
+                Console.WriteLine();
+            }
         }
     }
 }

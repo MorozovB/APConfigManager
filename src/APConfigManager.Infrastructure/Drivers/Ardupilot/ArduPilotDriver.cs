@@ -197,6 +197,7 @@ public class ArduPilotDriver : IAutopilotDriver
             State = state,
             ConnectedAt = DateTime.UtcNow,
             DeviceSerial = portInfo?.DeviceSerial ?? string.Empty,
+            UsbLocation = portInfo?.LocationPath ?? string.Empty,
             FirmwareVersion = fwVersion,
             FirmwareDescription = fwDescription,
             BootloaderRevision = blRevision
@@ -206,27 +207,51 @@ public class ArduPilotDriver : IAutopilotDriver
     }
 
     /// <summary>
-    /// Reconnects to the device after bootloader boot.
-    /// Uses USB serial to find the correct MAVLink port.
+    /// Reconnects to the device after a reboot, binding strictly to the port
+    /// that belongs to this session's device (identified by its USB serial).
+    /// Throws if the device does not reappear or another device is found instead.
     /// </summary>
     private async Task ReconnectAfterBootAsync(CancellationToken ct)
     {
-        var oldPort = session!.Port;
-        var oldSerial = session.DeviceSerial;
-        Console.WriteLine($"Reconnect: closing {oldPort}, serial='{oldSerial}'");
+        var oldPort     = session!.Port;
+        var oldSerial   = session.DeviceSerial;
+        var oldLocation = session.UsbLocation;
+        var sessionId   = session.Id;
+        var baudRate    = session.BaudRate;
+
+        // Strip the #USBMI(...) suffix — it changes between boot modes.
+        // The stable part is everything up to the last #USBMI segment.
+        var locationPrefix = StripUsbMiSuffix(oldLocation);
+
+        Console.WriteLine($"[Reconnect] oldPort={oldPort} locationPrefix={locationPrefix}");
 
         port.Close();
         await Task.Delay(2000, ct);
 
         var portsAfterBoot = portScanner.GetAvailablePorts();
-        var excludePorts = getOccupiedPorts?.Invoke(session.Id) ?? new List<string>();
-
-        Console.WriteLine($"Reconnect: ports={string.Join(",", portsAfterBoot)}, exclude={string.Join(",", excludePorts)}");
+        var excludePorts   = getOccupiedPorts?.Invoke(sessionId) ?? new List<string>();
 
         string? targetPort = null;
 
-        if (!string.IsNullOrWhiteSpace(oldSerial))
+        // Phase 1: match by location prefix — works across all boot mode transitions
+        if (!string.IsNullOrWhiteSpace(locationPrefix))
         {
+            Console.WriteLine($"[Reconnect] Phase 1: waiting for port with location prefix...");
+
+            targetPort = await WaitForPortByLocationPrefixAsync(
+                locationPrefix,
+                excludePorts,
+                TimeSpan.FromSeconds(PortSwitchTimeoutSeconds),
+                ct);
+
+            Console.WriteLine($"[Reconnect] Phase 1 result: {targetPort ?? "<null>"}");
+        }
+
+        // Phase 2: serial-preferred MAVLink fallback
+        if (string.IsNullOrWhiteSpace(targetPort))
+        {
+            Console.WriteLine($"[Reconnect] Phase 2: WaitForMavlinkPort...");
+
             targetPort = await portScanner.WaitForMavlinkPortAsync(
                 oldSerial,
                 portsAfterBoot,
@@ -234,27 +259,23 @@ public class ArduPilotDriver : IAutopilotDriver
                 TimeSpan.FromSeconds(PortSwitchTimeoutSeconds),
                 ct);
 
-            Console.WriteLine($"Reconnect: by serial '{oldSerial}' → {targetPort ?? "null"}");
+            Console.WriteLine($"[Reconnect] Phase 2 result: {targetPort ?? "<null>"}");
         }
 
-        if (string.IsNullOrWhiteSpace(targetPort))
+        // Phase 3: last resort — original port name
+        if (string.IsNullOrWhiteSpace(targetPort)
+            && !excludePorts.Contains(oldPort, StringComparer.OrdinalIgnoreCase))
         {
-            targetPort = await portScanner.WaitForNewPortAsync(
-                portsAfterBoot,
-                TimeSpan.FromSeconds(PortSwitchTimeoutSeconds),
-                ct);
-
-            Console.WriteLine($"Reconnect: by new port → {targetPort ?? "null"}");
-        }
-
-        if (string.IsNullOrWhiteSpace(targetPort))
-        {
+            Console.WriteLine($"[Reconnect] Phase 3: fallback to oldPort={oldPort}");
             targetPort = oldPort;
-            Console.WriteLine($"Reconnect: fallback to original {oldPort}");
         }
 
-        Console.WriteLine($"Reconnect: opening {targetPort}");
-        port.Open(targetPort, session.BaudRate);
+        if (string.IsNullOrWhiteSpace(targetPort))
+            throw new DeviceConnectionException("Device did not reappear after reboot.");
+
+        Console.WriteLine($"[Reconnect] connecting to {targetPort}");
+
+        port.Open(targetPort, baudRate);
         port.Flush();
 
         try
@@ -262,45 +283,27 @@ public class ArduPilotDriver : IAutopilotDriver
             await telemetry.SendHeartbeatAsync(ct);
             await WaitForDeviceHeartbeatAsync(ct);
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Reconnect: heartbeat failed on {targetPort}: {ex.Message}");
-        }
+        catch { }
 
         try
         {
             var fwVer = await telemetry.GetFirmwareVersionAsync(ct);
-            if (session != null && !string.IsNullOrWhiteSpace(fwVer))
-            {
+            if (session is not null && !string.IsNullOrWhiteSpace(fwVer))
                 session.FirmwareVersion = fwVer;
-                Console.WriteLine($"Reconnect: firmware version = {fwVer}");
-            }
         }
-        catch
-        {
-            Console.WriteLine("Reconnect: could not read firmware version");
-        }
+        catch { }
 
         var newPortInfo = portScanner.GetPortDescription(targetPort);
-        Console.WriteLine($"Reconnect: new port serial='{newPortInfo?.DeviceSerial}', desc='{newPortInfo?.Description}'");
-
-        if (newPortInfo != null
-            && !string.IsNullOrWhiteSpace(oldSerial)
-            && !string.IsNullOrWhiteSpace(newPortInfo.DeviceSerial)
-            && newPortInfo.DeviceSerial != oldSerial)
-        {
-            Console.WriteLine($"Reconnect: SERIAL MISMATCH! expected='{oldSerial}', got='{newPortInfo.DeviceSerial}'");
-        }
-
         currentMode = BootMode.Normal;
         UpdateSessionPortAndState(targetPort, DeviceState.Connected);
 
-        if (newPortInfo != null && !string.IsNullOrWhiteSpace(newPortInfo.DeviceSerial))
+        if (session is not null
+            && newPortInfo is not null
+            && !string.IsNullOrWhiteSpace(newPortInfo.DeviceSerial))
         {
-            session.DeviceSerial = newPortInfo.DeviceSerial;
+            session.DeviceSerial   = newPortInfo.DeviceSerial;
+            session.UsbLocation    = newPortInfo.LocationPath;
         }
-
-        Console.WriteLine($"Reconnected on {targetPort}");
     }
 
     /// <summary>
@@ -1091,6 +1094,7 @@ public class ArduPilotDriver : IAutopilotDriver
             State = state,
             ConnectedAt = session.ConnectedAt,
             DeviceSerial = session.DeviceSerial,
+            UsbLocation = session.UsbLocation,
             FirmwareVersion = session.FirmwareVersion,
             FirmwareDescription = session.FirmwareDescription,
             BootloaderRevision = session.BootloaderRevision
@@ -1173,5 +1177,62 @@ public class ArduPilotDriver : IAutopilotDriver
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Polls until a port appears whose LocationPath starts with the given prefix.
+    /// When a device changes boot mode it keeps the same hub path but appends
+    /// a different #USBMI(N) suffix — the prefix is the stable part.
+    /// If multiple ports match (e.g. MAVLink + SLCAN), prefers the MAVLink one.
+    /// </summary>
+    private async Task<string?> WaitForPortByLocationPrefixAsync(
+        string locationPrefix,
+        IReadOnlyList<string> excludePorts,
+        TimeSpan timeout,
+        CancellationToken ct)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(timeout);
+
+        try
+        {
+            while (true)
+            {
+                var candidates = portScanner.GetAvailablePortsDetailed()
+                    .Where(p => !excludePorts.Contains(p.Name, StringComparer.OrdinalIgnoreCase))
+                    .Where(p => !string.IsNullOrWhiteSpace(p.LocationPath)
+                                && p.LocationPath.StartsWith(locationPrefix,
+                                    StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
+                if (candidates.Count > 0)
+                {
+                    // Prefer the MAVLink port when the device exposes multiple interfaces
+                    var mavlink = candidates.FirstOrDefault(p => p.IsMavlink);
+                    return (mavlink ?? candidates[0]).Name;
+                }
+
+                await Task.Delay(300, cts.Token);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Removes the trailing #USBMI(...) segment from a USB LocationPath.
+    /// "PCIROOT(0)#PCI(1400)#USBROOT(0)#USB(1)#USB(4)#USBMI(0)"
+    ///   → "PCIROOT(0)#PCI(1400)#USBROOT(0)#USB(1)#USB(4)"
+    /// If no #USBMI segment is present the original string is returned unchanged.
+    /// </summary>
+    private static string StripUsbMiSuffix(string? locationPath)
+    {
+        if (string.IsNullOrWhiteSpace(locationPath))
+            return string.Empty;
+
+        var idx = locationPath.LastIndexOf("#USBMI(", StringComparison.OrdinalIgnoreCase);
+        return idx > 0 ? locationPath[..idx] : locationPath;
     }
 }

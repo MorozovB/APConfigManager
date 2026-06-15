@@ -53,24 +53,6 @@ builder.Services.AddSingleton<IPortScanner, PortScanner>();
 builder.Services.AddSingleton<IFirmwareParser, ApjFirmwareParser>();
 builder.Services.AddSingleton<IParamFileParser, ParamFileParser>();
 
-// ─── Protocols ──────────────────────────────────
-
-
-// ─── Driver ─────────────────────────────────────
-
-builder.Services.AddSingleton<ISessionManager>(sp =>
-{
-    var portScanner = sp.GetRequiredService<IPortScanner>();
-
-    return new SessionManager(() =>
-    {
-        var port = new SerialPortAdapter();
-        var bootloader = new StmBootloaderProtocol(port);
-        var telemetry = new MavLinkProtocol(port);
-        return new ArduPilotDriver(port, bootloader, telemetry, portScanner);
-    });
-});
-
 // ─── Services ───────────────────────────────────
 builder.Services.AddSingleton<IFirmwareValidator, FirmwareValidator>();
 

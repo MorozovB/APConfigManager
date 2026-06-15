@@ -85,7 +85,7 @@ public class MavLinkProtocol : ITelemetryProtocol
 
         var request = new mavlink_param_request_list_t
         {
-            target_system = 1,
+            target_system    = 1,
             target_component = 1
         };
 
@@ -95,71 +95,99 @@ public class MavLinkProtocol : ITelemetryProtocol
             ArduPilotConstants.MavSysId,
             ArduPilotConstants.MavCompId);
 
-        // Send request, retry up to 3 times if no response
-        var parameters = new List<Parameter>();
+        var parameters  = new List<Parameter>();
         var totalExpected = -1;
 
-        for (var attempt = 1; attempt <= 3; attempt++)
+        for (var attempt = 1; attempt <= 5; attempt++)
         {
+            parameters.Clear();
+            totalExpected = -1;
+
             await port.WriteAsync(packet, 0, packet.Length, ct);
             Console.WriteLine($"RequestAllParams: attempt {attempt}, sent PARAM_REQUEST_LIST");
 
-            var consecutiveNulls = 0;
+            // Time-based deadline instead of consecutive-null counter.
+            // Right after boot the autopilot sends many non-PARAM_VALUE packets
+            // (heartbeat, statustext, system_time) which were incorrectly
+            // eating through the null budget and breaking the loop early.
+            var idleDeadline  = DateTime.UtcNow.AddSeconds(4); // reset on each received param
+            var absoluteLimit = DateTime.UtcNow.AddSeconds(60);
 
-            while (true)
+            while (DateTime.UtcNow < absoluteLimit)
             {
                 ct.ThrowIfCancellationRequested();
 
-                var msg = await ReadMessageAsync(ct);
-
-                if (msg is null)
+                // Idle too long with no new params — device stopped sending
+                if (DateTime.UtcNow > idleDeadline)
                 {
-                    consecutiveNulls++;
-                    var threshold = parameters.Count > 0 ? 3 : 5;
-                    if (consecutiveNulls >= threshold)
-                        break;
-                    continue;
+                    Console.WriteLine($"RequestAllParams: idle timeout " +
+                        $"({parameters.Count}/{totalExpected})");
+                    break;
                 }
 
-                consecutiveNulls = 0;
+                var msg = await ReadMessageAsync(ct);
 
-                if (msg.data is null)
+                if (msg?.data is null)
                     continue;
+
+                // Keep heartbeat stream alive during long param reads
+                if (msg.msgid == (uint)MAVLINK_MSG_ID.HEARTBEAT)
+                {
+                    await SendHeartbeatAsync(ct);
+                    continue;
+                }
 
                 if (msg.msgid != (uint)MAVLINK_MSG_ID.PARAM_VALUE)
                     continue;
 
                 var paramValue = (mavlink_param_value_t)msg.data;
-                var name = System.Text.Encoding.ASCII.GetString(paramValue.param_id).TrimEnd('\0');
+                var name = System.Text.Encoding.ASCII
+                    .GetString(paramValue.param_id)
+                    .TrimEnd('\0');
 
                 parameters.Add(new Parameter
                 {
-                    Name = name,
-                    Value = paramValue.param_value,
+                    Name      = name,
+                    Value     = paramValue.param_value,
                     ParamType = paramValue.param_type
                 });
 
                 totalExpected = paramValue.param_count;
+                idleDeadline  = DateTime.UtcNow.AddSeconds(4); // reset idle window
+
+                if (parameters.Count >= totalExpected)
+                {
+                    Console.WriteLine($"RequestAllParams: complete " +
+                        $"({parameters.Count}/{totalExpected})");
+                    break;
+                }
+            }
+
+            Console.WriteLine($"RequestAllParams: attempt {attempt} " +
+                $"received {parameters.Count}/{totalExpected}");
+
+            if (parameters.Count > 0 && parameters.Count >= totalExpected)
+                break;
+
+            // Partial read — request only missing indices before next attempt
+            if (parameters.Count > 0 && totalExpected > 0)
+            {
+                Console.WriteLine($"RequestAllParams: partial read, requesting missing...");
+                await RequestMissingParamsAsync(parameters, totalExpected, ct);
 
                 if (parameters.Count >= totalExpected)
                     break;
             }
 
-            if (parameters.Count > 0)
-                break;
-
-            Console.WriteLine($"RequestAllParams: attempt {attempt} got 0 params, retrying...");
-            await Task.Delay(1000, ct);
+            await Task.Delay(2000, ct);
         }
 
-        Console.WriteLine($"RequestAllParams: received {parameters.Count}/{totalExpected} parameters");
+        Console.WriteLine($"RequestAllParams: final {parameters.Count}/{totalExpected}");
 
-        var deduplicated = parameters
+        return parameters
             .GroupBy(p => p.Name)
             .Select(g => g.Last())
             .ToList();
-
-        return deduplicated;
     }
 
     /// <summary>
@@ -589,6 +617,72 @@ public class MavLinkProtocol : ITelemetryProtocol
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Requests individual missing parameters by index.
+    /// Used when PARAM_REQUEST_LIST returns a partial set.
+    /// </summary>
+    private async Task RequestMissingParamsAsync(
+        List<Parameter> received,
+        int totalExpected,
+        CancellationToken ct)
+    {
+        // Build set of received indices from param_index if available,
+        // otherwise approximate by position
+        var receivedNames = received.Select(p => p.Name).ToHashSet();
+
+        for (var idx = 0; idx < totalExpected; idx++)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            // Request by index
+            var reqSingle = new mavlink_param_request_read_t
+            {
+                target_system    = 1,
+                target_component = 1,
+                param_index      = (short)idx,
+                param_id         = new byte[16]
+            };
+
+            var pkt = parser.GenerateMAVLinkPacket10(
+                MAVLINK_MSG_ID.PARAM_REQUEST_READ,
+                reqSingle,
+                ArduPilotConstants.MavSysId,
+                ArduPilotConstants.MavCompId);
+
+            await port.WriteAsync(pkt, 0, pkt.Length, ct);
+
+            // Wait up to 500 ms for this specific param
+            var deadline = DateTime.UtcNow.AddMilliseconds(500);
+            while (DateTime.UtcNow < deadline)
+            {
+                ct.ThrowIfCancellationRequested();
+
+                var msg = await ReadMessageAsync(ct);
+                if (msg?.data is null) continue;
+                if (msg.msgid != (uint)MAVLINK_MSG_ID.PARAM_VALUE) continue;
+
+                var pv   = (mavlink_param_value_t)msg.data;
+                var name = System.Text.Encoding.ASCII
+                    .GetString(pv.param_id)
+                    .TrimEnd('\0');
+
+                if (!receivedNames.Contains(name))
+                {
+                    received.Add(new Parameter
+                    {
+                        Name      = name,
+                        Value     = pv.param_value,
+                        ParamType = pv.param_type
+                    });
+                    receivedNames.Add(name);
+                }
+                break;
+            }
+
+            await Task.Delay(20, ct);
         }
     }
 }

@@ -47,5 +47,7 @@ namespace APConfigManager.Core.Models
         public float LastAltitude { get; set; }
 
         public DateTime LastTelemetryAt { get; set; }
+
+        public string UsbLocation { get; set; } = string.Empty;
     }
 }

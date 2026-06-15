@@ -47,5 +47,14 @@ namespace APConfigManager.Core.Interfaces.Transport
             List<string> excludePorts,
             TimeSpan timeOut,
             CancellationToken ct);
-    }
+
+        /// <summary>
+        /// Waits for the COM port at the given physical USB location to appear after reboot.
+        /// </summary>
+        Task<string?> WaitForPortByLocationAsync(
+            string usbLocation,
+            List<string> excludePorts,
+            TimeSpan timeout,
+            CancellationToken ct);
+        }
 }
