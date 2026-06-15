@@ -207,161 +207,125 @@ export const SessionSection = ({ index }: Props) => {
       borderRadius: '8px',
       border: `1px solid ${session.isConnected ? 'var(--colorBrandStroke1)' : 'var(--colorNeutralStroke1)'}`,
       display: 'flex',
-      flexDirection: 'column',
       gap: '12px',
-
       maxHeight: 'calc((100vh - 120px) / 4)',
       overflow: 'hidden',
     }}>
 
-      <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0, gap: '12px', flexWrap: 'wrap' }}>
+      {/* Левая колонка — управление */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flexShrink: 0 }}>
 
-        <Switch
-          checked={enabled}
-          onChange={(_e, data) => {
-            if (session.isConnected) return;
-            setEnabled(data.checked);
-          }}
-          disabled={session.isConnected || isBusy}
-        />
-        <PortSelector
-          ports={ports}
-          selectedPort={selectedPort}
-          onSelect={setSelectedPort}
-          disabled={session.isConnected || isBusy}
-        />
-        <Button
-          appearance="primary"
-          icon={<PlugConnectedRegular />}
-          onClick={handleConnect}
-          disabled={session.isConnected || !selectedPort || isBusy}
-        >
-          Connect
-        </Button>
-        <Button
-          appearance="subtle"
-          icon={<PlugDisconnectedRegular />}
-          onClick={handleDisconnect}
-          disabled={!session.isConnected || isBusy}
-          style={{ color: session.isConnected ? '#d63031' : undefined }}
-        >
-          Disconnect
-        </Button>
-        <DeviceStatusBadge state={session.deviceState} />
-        <DeviceInfoPanel session={session.data} visible={session.isConnected} />
-      </div>
-
-      {/*<DeviceInfoPanel session={session.data} visible={session.isConnected} />*/}
-
-      <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0, gap: '12px', flexWrap: 'wrap' }}>
-        <ProfileSelector
-          profiles={profiles}
-          selectedProfileId={selectedProfileId}
-          onSelect={setSelectedProfileId}
-          disabled={isBusy}
-        />
-        <Tooltip content="Start process" relationship="label">
-          <Button
-            appearance="primary"
-            icon={<PlayFilled />}
-            onClick={handlePlay}
-            disabled={!session.isConnected || !selectedProfileId || isBusy || loadingProfileFiles}
-            style={{ backgroundColor: '#00b894', borderColor: '#00b894', minWidth: '40px' }}
+        {/* Строка 1: Подключение + версия */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          <Switch
+            checked={enabled}
+            onChange={(_e, data) => {
+              if (session.isConnected) return;
+              setEnabled(data.checked);
+            }}
+            disabled={session.isConnected || isBusy}
           />
-        </Tooltip>
-        <Tooltip content="Stop process" relationship="label">
-          <Button
-            appearance="subtle"
-            icon={<StopFilled />}
-            onClick={handleStop}
-            disabled={!orchestrator.isRunning}
-            style={{ color: '#d63031', minWidth: '40px' }}
+          <PortSelector
+            ports={ports}
+            selectedPort={selectedPort}
+            onSelect={setSelectedPort}
+            disabled={session.isConnected || isBusy}
           />
-        </Tooltip>
-      </div>
+          <Button appearance="primary" icon={<PlugConnectedRegular />}
+                  onClick={handleConnect}
+                  disabled={session.isConnected || !selectedPort || isBusy}>
+            Connect
+          </Button>
+          <Button appearance="subtle" icon={<PlugDisconnectedRegular />}
+                  onClick={handleDisconnect}
+                  disabled={!session.isConnected || isBusy}
+                  style={{ color: session.isConnected ? '#d63031' : undefined }}>
+            Disconnect
+          </Button>
+          <DeviceStatusBadge state={session.deviceState} />
+          <DeviceInfoPanel session={session.data} visible={session.isConnected} />
+          <Button appearance="subtle" icon={<TextBulletListLtrRegular />}
+                  onClick={() => setShowLogs(!showLogs)} size="small">
+            {showLogs ? 'Hide' : 'Logs'}
+          </Button>
+        </div>
 
-      <div style={{ display: 'flex', gap: '12px', alignItems: "stretch", flex: 1, overflowY: 'auto', paddingRight: 4, minHeight: 0, }}>
-        <div style={{ flex: 1 }}>
-          {showCompletedResults && (
+        {/* Строка 2: Профиль + Play/Stop + Телеметрия + Результаты */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          <ProfileSelector profiles={profiles} selectedProfileId={selectedProfileId}
+                           onSelect={setSelectedProfileId} disabled={isBusy} />
+          <Tooltip content="Start process" relationship="label">
+            <Button appearance="primary" icon={<PlayFilled />} onClick={handlePlay}
+                    disabled={!session.isConnected || !selectedProfileId || isBusy || loadingProfileFiles}
+                    style={{ backgroundColor: '#00b894', borderColor: '#00b894', minWidth: '40px' }} />
+          </Tooltip>
+          <Tooltip content="Stop process" relationship="label">
+            <Button appearance="subtle" icon={<StopFilled />} onClick={handleStop}
+                    disabled={!orchestrator.isRunning}
+                    style={{ color: '#d63031', minWidth: '40px' }} />
+          </Tooltip>
+
+          {session.isConnected && (
             <div style={{
-              display: 'flex',
-              gap: '16px',
-              flexWrap: 'wrap',
-              padding: '4px 0',
+              display: 'flex', gap: '12px', padding: '3px 8px',
+              backgroundColor: 'var(--colorNeutralBackground1)',
+              borderRadius: '6px', border: '1px solid var(--colorNeutralStroke2)',
+              alignItems: 'center',
             }}>
-              {orchestrator.results
-                .filter(r => r.stage !== 'done')
-                .map((r, i) => {
-                  if (r.stage === 'flashing') {
-                    return (
-                      <Text key={i} size={200} weight="semibold"
-                            style={{ color: r.success ? '#00b894' : '#ff7675' }}>
-                        {r.success ? 'Firmware — Done ✓' : 'Firmware — Failed ✗'}
-                      </Text>
-                    );
-                  }
-                  if (r.stage === 'bootloader') {
-                    if (r.success) {
-                      const blAfter = session.data?.bootloaderRevision || 0;
-                      const revInfo = blRevBefore > 0 && blAfter > 0
-                        ? ` (rev ${blRevBefore} → ${blAfter})`
-                        : '';
-                      return (
-                        <Text key={i} size={200} weight="semibold" style={{ color: '#00b894' }}>
-                          Bootloader — Done ✓{revInfo}
-                        </Text>
-                      );
-                    }
-                    return (
-                      <Text key={i} size={200} weight="semibold" style={{ color: '#ff7675' }}>
-                        Bootloader — Failed ✗
-                      </Text>
-                    );
-                  }
-                  if (r.stage === 'params') {
-                    return (
-                      <Text key={i} size={200} weight="semibold"
-                            style={{ color: r.success ? '#00b894' : '#ff7675' }}>
-                        {r.success ? 'Parameters — Done ✓' : 'Parameters — Failed ✗'}
-                      </Text>
-                    );
-                  }
-                  return null;
-                })}
+              <AltitudeDisplay altitude={session.altitude} />
             </div>
           )}
-          <ProgressBar
-            percent={session.progress.percent}
-            message={session.progress.message || orchestrator.stage}
-            visible={session.isConnected && orchestrator.stage !== 'done' && orchestrator.stage !== 'idle' && orchestrator.stage !== 'error'}
-          />
+
+          {showCompletedResults && orchestrator.results
+            .filter(r => r.stage !== 'done')
+            .map((r, i) => {
+              if (r.stage === 'flashing')
+                return <Text key={i} size={200} weight="semibold"
+                             style={{ color: r.success ? '#00b894' : '#ff7675' }}>
+                  {r.success ? 'Firmware — Done ✓' : 'Firmware — Failed ✗'}
+                </Text>;
+              if (r.stage === 'bootloader') {
+                if (r.success) {
+                  const blAfter = session.data?.bootloaderRevision || 0;
+                  const revInfo = blRevBefore > 0 && blAfter > 0 ? ` (rev ${blRevBefore} → ${blAfter})` : '';
+                  return <Text key={i} size={200} weight="semibold" style={{ color: '#00b894' }}>
+                    Bootloader — Done ✓{revInfo}</Text>;
+                }
+                return <Text key={i} size={200} weight="semibold" style={{ color: '#ff7675' }}>
+                  Bootloader — Failed ✗</Text>;
+              }
+              if (r.stage === 'params')
+                return <Text key={i} size={200} weight="semibold"
+                             style={{ color: r.success ? '#00b894' : '#ff7675' }}>
+                  {r.success ? 'Parameters — Done ✓' : 'Parameters — Failed ✗'}
+                </Text>;
+              return null;
+            })}
         </div>
-        <AltitudeDisplay altitude={session.altitude} />
-        {/*<AccelerometerWidget data={session.isConnected ? accelData : []} />*/}
+
+        {/* Прогресс-бар */}
+        <ProgressBar
+          percent={session.progress.percent}
+          message={session.progress.message || orchestrator.stage}
+          visible={session.isConnected && orchestrator.stage !== 'done' && orchestrator.stage !== 'idle' && orchestrator.stage !== 'error'}
+        />
+
+        {/* Ошибка */}
+        {session.error && (
+          <div style={{
+            padding: '8px 12px', borderRadius: '4px',
+            backgroundColor: session.error.includes('disconnected') ? '#35120e' : undefined,
+            border: session.error.includes('disconnected') ? '1px solid #ff767544' : undefined,
+          }}>
+            <Text size={200} style={{ color: '#ff7675' }}>{session.error}</Text>
+          </div>
+        )}
       </div>
 
-      <div>
-        <Button
-          appearance="subtle"
-          icon={<TextBulletListLtrRegular />}
-          onClick={() => setShowLogs(!showLogs)}
-          size="small"
-        >
-          {showLogs ? 'Hide logs' : 'Show logs'}
-        </Button>
-        <LogConsole entries={logEntries} visible={showLogs} />
-      </div>
-
-      {session.error && (
-        <div style={{
-          padding: '8px 12px',
-          borderRadius: '4px',
-          backgroundColor: session.error.includes('disconnected') ? '#35120e' : undefined,
-          border: session.error.includes('disconnected') ? '1px solid #ff767544' : undefined,
-        }}>
-          <Text size={200} style={{ color: '#ff7675' }}>
-            {session.error}
-          </Text>
+      {/* Правая колонка — логи */}
+      {showLogs && (
+        <div style={{ flex: 1, minWidth: '250px', minHeight: 0, overflow: 'hidden' }}>
+          <LogConsole entries={logEntries} visible={true} />
         </div>
       )}
     </div>

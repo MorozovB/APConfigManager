@@ -34,7 +34,7 @@ export const LogConsole = ({ entries, visible }: Props) => {
       border: '1px solid var(--colorNeutralStroke1)',
       borderRadius: '4px',
       padding: '8px',
-      height: '180px',
+      height: '100%',
       overflowY: 'auto',
       fontFamily: 'Consolas, monospace',
       fontSize: '12px',

@@ -14,7 +14,7 @@ export const DeviceInfoPanel = ({ session, visible }: Props) => {
       display: 'flex',
       gap: '8px',
       flexWrap: 'wrap',
-      padding: '8px 12px',
+      padding: '3px 8px',
       backgroundColor: 'var(--colorNeutralBackground1)',
       borderRadius: '6px',
       border: '1px solid var(--colorNeutralStroke2)',
@@ -47,19 +47,19 @@ export const DeviceInfoPanel = ({ session, visible }: Props) => {
         </div>
       )}
 
-      {session.firmwareDescription && (
-        <div style={{
-          padding: '4px 10px',
-          borderRadius: '4px',
-          backgroundColor: '#1a1a2a',
-          border: '1px solid #60a5fa44',
-          maxWidth: '400px',
-        }}>
-          <Text size={200} style={{ color: '#93c5fd' }}>
-            {session.firmwareDescription}
-          </Text>
-        </div>
-      )}
+      {/*{session.firmwareDescription && (*/}
+      {/*  <div style={{*/}
+      {/*    padding: '4px 10px',*/}
+      {/*    borderRadius: '4px',*/}
+      {/*    backgroundColor: '#1a1a2a',*/}
+      {/*    border: '1px solid #60a5fa44',*/}
+      {/*    maxWidth: '400px',*/}
+      {/*  }}>*/}
+      {/*    <Text size={200} style={{ color: '#93c5fd' }}>*/}
+      {/*      {session.firmwareDescription}*/}
+      {/*    </Text>*/}
+      {/*  </div>*/}
+      {/*)}*/}
     </div>
   );
 };
