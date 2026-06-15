@@ -212,10 +212,8 @@ export const SessionSection = ({ index }: Props) => {
       overflow: 'hidden',
     }}>
 
-      {/* Левая колонка — управление */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flexShrink: 0 }}>
 
-        {/* Строка 1: Подключение + версия */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
           <Switch
             checked={enabled}
@@ -250,7 +248,6 @@ export const SessionSection = ({ index }: Props) => {
           </Button>
         </div>
 
-        {/* Строка 2: Профиль + Play/Stop + Телеметрия + Результаты */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
           <ProfileSelector profiles={profiles} selectedProfileId={selectedProfileId}
                            onSelect={setSelectedProfileId} disabled={isBusy} />
@@ -303,14 +300,12 @@ export const SessionSection = ({ index }: Props) => {
             })}
         </div>
 
-        {/* Прогресс-бар */}
         <ProgressBar
           percent={session.progress.percent}
           message={session.progress.message || orchestrator.stage}
           visible={session.isConnected && orchestrator.stage !== 'done' && orchestrator.stage !== 'idle' && orchestrator.stage !== 'error'}
         />
 
-        {/* Ошибка */}
         {session.error && (
           <div style={{
             padding: '8px 12px', borderRadius: '4px',
@@ -322,7 +317,6 @@ export const SessionSection = ({ index }: Props) => {
         )}
       </div>
 
-      {/* Правая колонка — логи */}
       {showLogs && (
         <div style={{ flex: 1, minWidth: '250px', minHeight: 0, overflow: 'hidden' }}>
           <LogConsole entries={logEntries} visible={true} />
