@@ -49,20 +49,20 @@ function App() {
           >
             Tools
           </Tab>
-          <Tab
-            value="settings"
-            disabled={isTabLocked('settings')}
-            style={isTabLocked('settings') ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}
-          >
-            Settings
-          </Tab>
+        {/*  <Tab*/}
+        {/*    value="settings"*/}
+        {/*    disabled={isTabLocked('settings')}*/}
+        {/*    style={isTabLocked('settings') ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}*/}
+        {/*  >*/}
+        {/*    Settings*/}
+        {/*  </Tab>*/}
         </TabList>
 
-        {hasActiveSessions && (
-          <Text size={200} style={{ color: '#fdcb6e' }}>
-            Disconnect all sessions to access other tabs
-          </Text>
-        )}
+        {/*{hasActiveSessions && (*/}
+        {/*  <Text size={200} style={{ color: '#fdcb6e' }}>*/}
+        {/*    Disconnect all sessions to access other tabs*/}
+        {/*  </Text>*/}
+        {/*)}*/}
       </div>
 
       <div style={{ flex: 1, padding: '16px', overflow: 'auto' }}>
