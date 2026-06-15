@@ -352,56 +352,5 @@ namespace APConfigManager.Infrastructure.Transport
             return m.Success ? int.Parse(m.Groups[1].Value) : 0;
         }
 
-        public static void DebugPrintPorts()
-        {
-            using var searcher = new ManagementObjectSearcher(
-                "SELECT * FROM Win32_PnPEntity WHERE Name LIKE '%(COM%'");
-
-            Console.WriteLine("=== PORTS ===");
-
-            foreach (var device in searcher.Get())
-            {
-                var name = device["Name"]?.ToString() ?? "";
-                var pnp = device["PNPDeviceID"]?.ToString() ?? "";
-
-                Console.WriteLine($"Name: {name}");
-                Console.WriteLine($"PNP:  {pnp}");
-
-                try
-                {
-                    var mo = (ManagementObject)device;
-                    var inParams = mo.GetMethodParameters("GetDeviceProperties");
-                    inParams["devicePropertyKeys"] = new[] { "DEVPKEY_Device_LocationInfo" };
-
-                    using var outParams = mo.InvokeMethod("GetDeviceProperties", inParams, null);
-                    if (outParams?["deviceProperties"] is ManagementBaseObject[] props && props.Length > 0)
-                    {
-                        Console.WriteLine($"LocationInfo: {props[0]["Data"]}");
-                    }
-                }
-                catch { }
-
-                try
-                {
-                    var mo = (ManagementObject)device;
-                    var inParams = mo.GetMethodParameters("GetDeviceProperties");
-                    inParams["devicePropertyKeys"] = new[] { "DEVPKEY_Device_LocationPaths" };
-
-                    using var outParams = mo.InvokeMethod("GetDeviceProperties", inParams, null);
-                    if (outParams?["deviceProperties"] is ManagementBaseObject[] props && props.Length > 0)
-                    {
-                        if (props[0]["Data"] is string[] arr)
-                        {
-                            Console.WriteLine("LocationPaths:");
-                            foreach (var p in arr)
-                                Console.WriteLine($"  {p}");
-                        }
-                    }
-                }
-                catch { }
-
-                Console.WriteLine();
-            }
-        }
     }
 }
