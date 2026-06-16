@@ -223,8 +223,6 @@ public class ArduPilotDriver : IAutopilotDriver
         // The stable part is everything up to the last #USBMI segment.
         var locationPrefix = StripUsbMiSuffix(oldLocation);
 
-        Console.WriteLine($"[Reconnect] oldPort={oldPort} locationPrefix={locationPrefix}");
-
         port.Close();
         await Task.Delay(2000, ct);
 
@@ -236,7 +234,6 @@ public class ArduPilotDriver : IAutopilotDriver
         // Phase 1: match by location prefix — works across all boot mode transitions
         if (!string.IsNullOrWhiteSpace(locationPrefix))
         {
-            Console.WriteLine($"[Reconnect] Phase 1: waiting for port with location prefix...");
 
             targetPort = await WaitForPortByLocationPrefixAsync(
                 locationPrefix,
@@ -244,13 +241,11 @@ public class ArduPilotDriver : IAutopilotDriver
                 TimeSpan.FromSeconds(PortSwitchTimeoutSeconds),
                 ct);
 
-            Console.WriteLine($"[Reconnect] Phase 1 result: {targetPort ?? "<null>"}");
         }
 
         // Phase 2: serial-preferred MAVLink fallback
         if (string.IsNullOrWhiteSpace(targetPort))
         {
-            Console.WriteLine($"[Reconnect] Phase 2: WaitForMavlinkPort...");
 
             targetPort = await portScanner.WaitForMavlinkPortAsync(
                 oldSerial,
@@ -258,22 +253,20 @@ public class ArduPilotDriver : IAutopilotDriver
                 excludePorts,
                 TimeSpan.FromSeconds(PortSwitchTimeoutSeconds),
                 ct);
-
-            Console.WriteLine($"[Reconnect] Phase 2 result: {targetPort ?? "<null>"}");
         }
 
         // Phase 3: last resort — original port name
         if (string.IsNullOrWhiteSpace(targetPort)
             && !excludePorts.Contains(oldPort, StringComparer.OrdinalIgnoreCase))
         {
-            Console.WriteLine($"[Reconnect] Phase 3: fallback to oldPort={oldPort}");
             targetPort = oldPort;
         }
 
         if (string.IsNullOrWhiteSpace(targetPort))
+        {
             throw new DeviceConnectionException("Device did not reappear after reboot.");
-
-        Console.WriteLine($"[Reconnect] connecting to {targetPort}");
+        }
+            
 
         port.Open(targetPort, baudRate);
         port.Flush();
