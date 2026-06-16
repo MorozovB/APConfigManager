@@ -58,13 +58,13 @@ export const ProfileList = ({ profiles, onEdit, onDelete }: Props) => {
 
             <TableCell>
               <Text size={200}>
-                {profile.firmwareFilePath || '—'}
+                {profile.firmwareFileName || '—'}
               </Text>
             </TableCell>
 
             <TableCell>
               <Text size={200}>
-                {profile.parameterFilePath || '—'}
+                {profile.parameterFileName || '—'}
               </Text>
             </TableCell>
 

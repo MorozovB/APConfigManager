@@ -35,6 +35,19 @@ namespace APConfigManager.Core.Models.Settings
         /// </summary>
         public string? FirmwareFilePath {  get; set; } = string.Empty;
 
+
+        //-------Gets the names of files for firmware and param.---------
+        public string? ParameterFileName =>
+                string.IsNullOrWhiteSpace(ParameterFilePath)
+                    ? null
+                    : Path.GetFileName(ParameterFilePath);
+
+        public string? FirmwareFileName =>
+            string.IsNullOrWhiteSpace(FirmwareFilePath)
+                ? null
+                : Path.GetFileName(FirmwareFilePath);
+        //----------------------------------------------------------------
+
         /// <summary>
         /// Default operation options for current devices profile.
         /// </summary>
