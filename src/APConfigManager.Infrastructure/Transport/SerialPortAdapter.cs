@@ -7,7 +7,7 @@ namespace APConfigManager.Infrastructure.Transport;
 /// <summary>
 /// Wrapper over System.IO.Ports.SerialPort with retry logic.
 /// </summary>
-public class SerialPortAdapter : ISerialPortAdapter
+public class SerialPortAdapter : ISerialPortAdapter, IDisposable
 {
     private SerialPort? _serialPort;
 

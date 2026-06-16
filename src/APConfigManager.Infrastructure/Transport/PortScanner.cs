@@ -61,7 +61,10 @@ namespace APConfigManager.Infrastructure.Transport
                 });
             }
 
-            return result.OrderBy(p => ExtractPortNumber(p.Name)).ToList();
+            return result
+                .Where(IsVisiblePort)
+                .OrderBy(p => ExtractPortNumber(p.Name))
+                .ToList();
         }
 
         public PortDescription? GetPortDescription(string portName)
@@ -350,6 +353,16 @@ namespace APConfigManager.Infrastructure.Transport
         {
             var m = Regex.Match(port, @"COM(\d+)");
             return m.Success ? int.Parse(m.Groups[1].Value) : 0;
+        }
+
+        private static bool IsVisiblePort(PortDescription port)
+        {
+            if (string.IsNullOrWhiteSpace(port.Description))
+                return true;
+
+            return !port.Description.Contains(
+                "SLCAN",
+                StringComparison.OrdinalIgnoreCase);
         }
 
     }
