@@ -34,6 +34,8 @@ const emptyProfile: DeviceProfile = {
   boardType: 0,
   parameterFilePath: null,
   firmwareFilePath: null,
+  parameterFileName: null,
+  firmwareFileName: null,
   profileOptions: {
     bootloader: false,
     firmware: false,

@@ -17,6 +17,7 @@ public class FlashControllerTests
     private readonly Mock<IFlashService> mockFlashService;
     private readonly Mock<IHubContext<DeviceHub>> mockHubContext;
     private readonly Mock<IClientProxy> mockClientProxy;
+    private readonly Mock<ISessionManager> mockSessionManager;
     private readonly FlashController controller;
 
     private readonly Guid sessionId = Guid.NewGuid();
@@ -50,6 +51,7 @@ public class FlashControllerTests
 
         controller = new FlashController(
             mockFlashService.Object,
+            mockSessionManager.Object,
             mockHubContext.Object);
     }
 

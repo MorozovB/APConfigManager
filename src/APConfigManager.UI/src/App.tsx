@@ -1,4 +1,4 @@
-import { FluentProvider, TabList, Tab, SelectTabEvent, SelectTabData, Text } from '@fluentui/react-components';
+import { FluentProvider, TabList, Tab, SelectTabEvent, SelectTabData} from '@fluentui/react-components';
 import { useState } from 'react';
 import { darkTheme } from './styles/theme';
 import { AppHeader } from './components/layout/AppHeader';
