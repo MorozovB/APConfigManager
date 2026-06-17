@@ -133,3 +133,4 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 /tests/APConfigManager.Infrastructure.Tests/TestData
+/build
