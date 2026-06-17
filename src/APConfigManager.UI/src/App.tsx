@@ -57,12 +57,6 @@ function App() {
         {/*    Settings*/}
         {/*  </Tab>*/}
         </TabList>
-
-        {/*{hasActiveSessions && (*/}
-        {/*  <Text size={200} style={{ color: '#fdcb6e' }}>*/}
-        {/*    Disconnect all sessions to access other tabs*/}
-        {/*  </Text>*/}
-        {/*)}*/}
       </div>
 
       <div style={{ flex: 1, padding: '16px', overflow: 'auto' }}>
