@@ -2,8 +2,6 @@ using Microsoft.UI.Xaml;
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Net.Http;
-using System.Threading.Tasks;
 
 namespace APConfigManager.Desktop
 {
@@ -24,24 +22,11 @@ namespace APConfigManager.Desktop
 
         protected override void OnLaunched(LaunchActivatedEventArgs args)
         {
+            StartApi();
+
             _window = new MainWindow();
             _window.Closed += OnWindowClosed;
             _window.Activate();
-
-            _ = StartApiAndLoadAsync();
-        }
-
-        private async Task StartApiAndLoadAsync()
-        {
-            try
-            {
-                StartApi();
-                await WaitForApiAsync();
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"API startup error: {ex.Message}");
-            }
         }
 
         private void StartApi()
@@ -52,22 +37,15 @@ namespace APConfigManager.Desktop
                     System.Reflection.Assembly.GetExecutingAssembly().Location)
                     ?? AppContext.BaseDirectory;
 
-                var apiExe = Path.Combine(appDir, "..", "api", "APConfigManager.Api.exe");
-                apiExe = Path.GetFullPath(apiExe);
+                var apiExe = Path.GetFullPath(Path.Combine(appDir, "..", "api", "APConfigManager.Api.exe"));
 
                 if (!File.Exists(apiExe))
-                {
                     apiExe = Path.Combine(appDir, "api", "APConfigManager.Api.exe");
-                }
 
                 if (!File.Exists(apiExe))
                 {
                     var csproj = FindApiProject();
-                    if (string.IsNullOrEmpty(csproj))
-                    {
-                        Debug.WriteLine("API not found");
-                        return;
-                    }
+                    if (string.IsNullOrEmpty(csproj)) return;
 
                     _apiProcess = new Process
                     {
@@ -80,11 +58,8 @@ namespace APConfigManager.Desktop
                         }
                     };
                     _apiProcess.Start();
-                    Debug.WriteLine($"API (dev) started: PID {_apiProcess.Id}");
                     return;
                 }
-
-                Debug.WriteLine($"API exe: {apiExe}");
 
                 _apiProcess = new Process
                 {
@@ -96,13 +71,11 @@ namespace APConfigManager.Desktop
                         CreateNoWindow = true
                     }
                 };
-
                 _apiProcess.Start();
-                Debug.WriteLine($"API started: PID {_apiProcess.Id}");
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Failed to start API: {ex.Message}");
+                Debug.WriteLine($"API failed: {ex.Message}");
             }
         }
 
@@ -117,23 +90,6 @@ namespace APConfigManager.Desktop
                 dir = dir.Parent;
             }
             return null;
-        }
-
-        private static async Task WaitForApiAsync()
-        {
-            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
-            for (var i = 0; i < 30; i++)
-            {
-                try
-                {
-                    await client.GetAsync("http://localhost:5000/api/ports");
-                    Debug.WriteLine("API ready");
-                    return;
-                }
-                catch { }
-                await Task.Delay(500);
-            }
-            Debug.WriteLine("API not ready after 15s");
         }
 
         private void OnWindowClosed(object sender, WindowEventArgs args)

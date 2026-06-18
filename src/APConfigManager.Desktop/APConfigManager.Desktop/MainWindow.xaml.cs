@@ -1,5 +1,7 @@
 using System;
+using System.IO;
 using System.Net.Http;
+using System.Threading.Tasks;
 using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -19,13 +21,14 @@ namespace APConfigManager.Desktop
             var appWindow = AppWindow.GetFromWindowId(windowId);
             appWindow.Resize(new SizeInt32(1280, 800));
 
-            InitializeWebView();
+            _ = InitAsync();
         }
 
-        private async void InitializeWebView()
+        private async Task InitAsync()
         {
             try
             {
+
                 await WebView.EnsureCoreWebView2Async();
 
                 WebView.CoreWebView2.Settings.AreDevToolsEnabled = true;
@@ -36,25 +39,43 @@ namespace APConfigManager.Desktop
                     LoadingOverlay.Visibility = Visibility.Collapsed;
                 };
 
-                var devUrl = "http://localhost:5173";
-                var prodUrl = "http://localhost:5000";
-
-                try
-                {
-                    using var client = new HttpClient();
-                    client.Timeout = TimeSpan.FromSeconds(2);
-                    await client.GetAsync(devUrl);
-                    WebView.Source = new Uri(devUrl);
-                }
-                catch
-                {
-                    WebView.Source = new Uri(prodUrl);
-                }
+                var url = await DetectUrlAsync();
+                WebView.Source = new Uri(url);
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"WebView init failed: {ex.Message}");
+                File.WriteAllText(
+                    Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
+                        "desktop_error.txt"),
+                    ex.ToString());
             }
+        }
+
+        private static async Task<string> DetectUrlAsync()
+        {
+            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
+
+            try
+            {
+                await client.GetAsync("http://localhost:5173");
+                return "http://localhost:5173";
+            }
+            catch { }
+
+            for (var i = 0; i < 30; i++)
+            {
+                try
+                {
+                    var r = await client.GetAsync("http://localhost:5000");
+                    if (r.IsSuccessStatusCode)
+                        return "http://localhost:5000";
+                }
+                catch { }
+                await Task.Delay(500);
+            }
+
+            return "http://localhost:5000";
         }
     }
 }
