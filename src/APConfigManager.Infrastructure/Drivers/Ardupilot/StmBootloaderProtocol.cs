@@ -35,7 +35,7 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
             }
 
             await Task.Delay(100, ct);
-            port.Flush();
+            port.Purge();
 
             // Actual sync attempts with retry
             for (var attempt = 1; attempt <= 3; attempt++)
@@ -63,7 +63,7 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
                         && response[1] == ArduPilotConstants.OK)
                     {
                         await Task.Delay(100, ct);
-                        port.Flush();
+                        port.Purge();
                         return true;
                     }
                 }
@@ -71,7 +71,7 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
                 {
                     // Ignore timeout and retry
                 }
-                port.Flush();
+                port.Purge();
                 await Task.Delay(100, ct);
             }
 

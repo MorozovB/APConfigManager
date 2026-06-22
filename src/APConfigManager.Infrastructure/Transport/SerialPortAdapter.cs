@@ -7,7 +7,7 @@ namespace APConfigManager.Infrastructure.Transport;
 /// <summary>
 /// Wrapper over System.IO.Ports.SerialPort with retry logic.
 /// </summary>
-public class SerialPortAdapter : ISerialPortAdapter, IDisposable
+public sealed class SerialPortAdapter : ISerialPortAdapter
 {
     private SerialPort? _serialPort;
 
@@ -31,7 +31,7 @@ public class SerialPortAdapter : ISerialPortAdapter, IDisposable
             if (_serialPort is null || !_serialPort.IsOpen)
             {
                 throw new InvalidOperationException("Serial port is not open.");
-            }                
+            }
 
             return _serialPort.BaseStream;
         }
@@ -68,7 +68,9 @@ public class SerialPortAdapter : ISerialPortAdapter, IDisposable
                 _serialPort = null;
 
                 if (attempt < MaxRetries)
+                {
                     Thread.Sleep(RetryDelayMs);
+                }
             }
         }
 
@@ -83,13 +85,23 @@ public class SerialPortAdapter : ISerialPortAdapter, IDisposable
     public void Close()
     {
         if (_serialPort is null)
+        {
             return;
+        }
 
-        if (_serialPort.IsOpen)
-            _serialPort.Close();
-
-        _serialPort.Dispose();
-        _serialPort = null;
+        try
+        {
+            if (_serialPort.IsOpen)
+            {
+                _serialPort.Close();
+            }
+                
+        }
+        finally
+        {
+            _serialPort.Dispose();
+            _serialPort = null;
+        }
     }
 
     /// <summary>
@@ -98,8 +110,10 @@ public class SerialPortAdapter : ISerialPortAdapter, IDisposable
     public async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken ct)
     {
         if (_serialPort is null || !_serialPort.IsOpen)
+        {
             throw new InvalidOperationException("Serial port is not open.");
-
+        }
+            
         return await _serialPort.BaseStream.ReadAsync(buffer, offset, count, ct);
     }
 
@@ -109,7 +123,9 @@ public class SerialPortAdapter : ISerialPortAdapter, IDisposable
     public async Task WriteAsync(byte[] data, int offset, int count, CancellationToken ct)
     {
         if (_serialPort is null || !_serialPort.IsOpen)
+        {
             throw new InvalidOperationException("Serial port is not open.");
+        }            
 
         await _serialPort.BaseStream.WriteAsync(data, offset, count, ct);
     }
@@ -120,18 +136,22 @@ public class SerialPortAdapter : ISerialPortAdapter, IDisposable
     public void ChangeBaudRate(int baudRate)
     {
         if (_serialPort is null || !_serialPort.IsOpen)
+        {
             throw new InvalidOperationException("Serial port is not open.");
-
+        }
+            
         _serialPort.BaudRate = baudRate;
     }
 
     /// <summary>
     /// Discards both input and output buffers.
     /// </summary>
-    public void Flush()
+    public void Purge()
     {
         if (_serialPort is null || !_serialPort.IsOpen)
+        {
             return;
+        }
 
         _serialPort.DiscardInBuffer();
         _serialPort.DiscardOutBuffer();

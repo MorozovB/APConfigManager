@@ -35,8 +35,8 @@ namespace APConfigManager.Core.Interfaces.Transport
         void ChangeBaudRate(int baudRate);
 
         /// <summary>
-        /// Flush buffer.
+        /// Purge buffer.
         /// </summary>
-        void Flush();
+        void Purge();
     }
 }

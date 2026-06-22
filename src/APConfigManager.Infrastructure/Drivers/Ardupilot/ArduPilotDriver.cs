@@ -166,7 +166,7 @@ public class ArduPilotDriver : IAutopilotDriver
         }
         catch
         {
-            this.port.Flush();
+            this.port.Purge();
             var syncOk = await this.bootloader.SyncAsync(ct);
             if (syncOk)
             {
@@ -269,7 +269,7 @@ public class ArduPilotDriver : IAutopilotDriver
             
 
         port.Open(targetPort, baudRate);
-        port.Flush();
+        port.Purge();
 
         try
         {
@@ -307,7 +307,7 @@ public class ArduPilotDriver : IAutopilotDriver
     {
         EnsureConnected();
         await StopTelemetryAsync();
-        port.Flush();
+        port.Purge();
 
         await EnsureModeAsync(BootMode.Bootloader, ct);
 
@@ -1013,7 +1013,7 @@ public class ArduPilotDriver : IAutopilotDriver
         telemetryTask = null;
 
         if (port.IsOpen)
-            port.Flush();
+            port.Purge();
     }
 
     public async Task StopTelemetryAsync()
@@ -1037,7 +1037,7 @@ public class ArduPilotDriver : IAutopilotDriver
 
         if (port.IsOpen)
         {
-            port.Flush();
+            port.Purge();
         }
     }
 
@@ -1056,7 +1056,7 @@ public class ArduPilotDriver : IAutopilotDriver
             if (mode == BootMode.Bootloader)
             {
                 StopTelemetryAsync();
-                port.Flush();
+                port.Purge();
             }
             return;
         }
