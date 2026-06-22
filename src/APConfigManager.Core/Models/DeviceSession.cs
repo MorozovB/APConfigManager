@@ -37,17 +37,35 @@ namespace APConfigManager.Core.Models
         /// </summary>
         public string DeviceSerial { get; set; } = string.Empty;
 
-        //For test
+        /// <summary>
+        /// Display version of the firmware (if available).
+        /// </summary>
         public string FirmwareVersion { get; set; } = string.Empty;
 
-        public uint BootloaderRevision { get; set; }
 
+        /// <summary>
+        /// Display version of the bootloader (if available).
+        /// </summary>
+        public uint BootloaderRevision { get; set; }
+        
+        /// <summary>
+        /// Human-readable firmware description.
+        /// </summary>
         public string FirmwareDescription { get; set; } = string.Empty;
 
+        /// <summary>
+        /// Display altitude of the device after the last telemetry update.
+        /// </summary>
         public float LastAltitude { get; set; }
 
+        /// <summary>
+        /// Timestamp of the last telemetry update.
+        /// </summary>
         public DateTime LastTelemetryAt { get; set; }
 
+        /// <summary>
+        /// Remember the USB location of the device for session management and reconnection purposes.
+        /// </summary>
         public string UsbLocation { get; set; } = string.Empty;
     }
 }

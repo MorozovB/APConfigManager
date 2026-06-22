@@ -16,7 +16,7 @@ namespace APConfigManager.Core.Models
         /// </summary>
         public uint BoardId { get; init; }
 
-        // <summary>
+        /// <summary>
         /// Firmware version (semantic or vendor-specific).
         /// </summary>
         public string Version { get; init; } = string.Empty;

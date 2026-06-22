@@ -74,7 +74,7 @@ namespace APConfigManager.Core.Interfaces.Drivers
         DeviceSession? GetCurrentSession();
 
         /// <summary>
-        /// Returns true if the driver is currently connected to a device, false otherwise.
+        /// Starts the telemetry reading loop, invoking the callback with each new altitude value.
         /// </summary>
         void StartTelemetry(Action<float> onAltitude);
 
@@ -83,6 +83,11 @@ namespace APConfigManager.Core.Interfaces.Drivers
         /// </summary>
         Task StopTelemetryAsync();
 
+
+        /// <summary>
+        /// Sets a callback to be invoked when the autopilot disconnects unexpectedly.
+        /// This allows the application to handle disconnection events gracefully.
+        /// </summary>
         void SetDisconnectCallback(Action onDisconnected);
     }
 }

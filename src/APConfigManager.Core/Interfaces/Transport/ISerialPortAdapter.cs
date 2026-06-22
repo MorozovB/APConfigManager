@@ -27,7 +27,7 @@ namespace APConfigManager.Core.Interfaces.Transport
         /// <summary>
         /// Writing async data
         /// </summary>
-        Task WriteAsync(byte[] data, int offset, int coun, CancellationToken ct);
+        Task WriteAsync(byte[] data, int offset, int count, CancellationToken ct);
 
         /// <summary>
         /// Change baud rate for COM-port
