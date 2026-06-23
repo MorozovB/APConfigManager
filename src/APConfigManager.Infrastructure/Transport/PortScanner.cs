@@ -8,6 +8,9 @@ namespace APConfigManager.Infrastructure.Transport
 {
     public class PortScanner : IPortScanner
     {
+        /// <summary>
+        /// Used to get a list of available COM ports on the system, sorted by port number.
+        /// </summary>
         public List<string> GetAvailablePorts()
         {
             return SerialPort.GetPortNames()
@@ -15,6 +18,11 @@ namespace APConfigManager.Infrastructure.Transport
                 .ToList();
         }
 
+        /// <summary>
+        /// Returns a list of available COM ports with detailed information, including description,
+        /// vendor ID, product ID, device serial number, and location path.
+        /// The list is filtered to exclude certain ports (e.g., SLCAN) and sorted by port number.
+        /// </summary>
         public List<PortDescription> GetAvailablePortsDetailed()
         {
             var result = new List<PortDescription>();
@@ -67,12 +75,18 @@ namespace APConfigManager.Infrastructure.Transport
                 .ToList();
         }
 
+        /// <summary>
+        /// Gets the detailed description of a specific COM port by its name. Returns null if the port is not found.
+        /// </summary>
         public PortDescription? GetPortDescription(string portName)
         {
             return GetAvailablePortsDetailed()
                 .FirstOrDefault(p => p.Name.Equals(portName, StringComparison.OrdinalIgnoreCase));
         }
 
+        /// <summary>
+        /// Waits for a new COM port to appear that is not in the list of existing ports.
+        /// </summary>
         public async Task<string?> WaitForNewPortAsync(
             List<string> existingPorts,
             TimeSpan timeout,
@@ -91,7 +105,9 @@ namespace APConfigManager.Infrastructure.Transport
                     var added = now.FirstOrDefault(p => !existingPorts.Contains(p));
 
                     if (added != null)
+                    {
                         return added;
+                    }    
                 }
             }
             catch (OperationCanceledException)
@@ -100,6 +116,9 @@ namespace APConfigManager.Infrastructure.Transport
             }
         }
 
+        /// <summary>
+        /// Waits for a bootloader COM port to appear, replacing the original port if it disappears.
+        /// </summary>
         public async Task<string?> WaitForBootloaderPortAsync(
             string originalPort,
             TimeSpan timeout,
@@ -109,6 +128,9 @@ namespace APConfigManager.Infrastructure.Transport
             return await WaitForBootloaderPortAsync(originalPort, before, timeout, ct);
         }
 
+        /// <summary>
+        /// Waits for a bootloader COM port to appear, comparing the list of ports before and after the original port disappears.
+        /// </summary>
         public async Task<string?> WaitForBootloaderPortAsync(
             string originalPort,
             List<string> portsBefore,
@@ -123,10 +145,12 @@ namespace APConfigManager.Infrastructure.Transport
                 while (true)
                 {
                     await Task.Delay(300, cts.Token);
-
                     var now = GetAvailablePorts();
+
                     if (!now.Contains(originalPort))
+                    {
                         break;
+                    }
                 }
 
                 while (true)
@@ -134,13 +158,17 @@ namespace APConfigManager.Infrastructure.Transport
                     await Task.Delay(300, cts.Token);
 
                     var now = GetAvailablePorts();
-
                     var newPort = now.FirstOrDefault(p => !portsBefore.Contains(p));
+
                     if (newPort != null)
+                    {
                         return newPort;
+                    }
 
                     if (now.Contains(originalPort))
+                    {
                         return originalPort;
+                    }
                 }
             }
             catch (OperationCanceledException)
@@ -341,8 +369,11 @@ namespace APConfigManager.Infrastructure.Transport
                     props.Length > 0)
                 {
                     if (props[0]["Data"] is string[] arr && arr.Length > 0)
+                    {
                         return arr[0];
+                    }
                 }
+
             }
             catch { }
 
