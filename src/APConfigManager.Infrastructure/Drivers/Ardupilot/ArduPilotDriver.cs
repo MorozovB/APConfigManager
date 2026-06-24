@@ -17,7 +17,7 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot;
 /// </summary>
 public class ArduPilotDriver : IAutopilotDriver
 {
-    private const int ChunkSize = 64;
+    private const int ChunkSize = ArduPilotConstants.ProgMultiMaxSize; // 64 bytes per write
     private const int HeartbeatTimeoutMs = 3000;
     private const int PortSwitchTimeoutSeconds = 20;
     private const int WriteParamsPasses = 3;

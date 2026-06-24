@@ -5,6 +5,8 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
     /// </summary>
     public static class ArduPilotConstants
     {
+        //---------------STM32 Bootloader Commands---------------
+
         /// <summary>Bootloader SYNC request command.</summary>
         public const byte GET_SYNC = 0x21;
 
@@ -29,6 +31,8 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
         /// <summary>End of command marker.</summary>
         public const byte EOC = 0x20;
 
+        //---------------STM32 Bootloader Responses---------------
+
         /// <summary>Bootloader response: in sync.</summary>
         public const byte INSYNC = 0x12;
 
@@ -40,6 +44,8 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
 
         /// <summary>Bootloader response: sync failed.</summary>
         public const byte INVALID = 0x13;
+
+        //----------------Transmission Commands--------------    
 
         /// <summary>Maximum bytes per PROG_MULTI write (64 bytes).</summary>
         public const int ProgMultiMaxSize = 64;
@@ -54,6 +60,8 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
         public const int BootloaderBaudRate = 115200;
 
         public const int FlashBaudRate = 921600;
+
+        //----------------MAVLink Commands------------------
 
         /// <summary>MAVLink system ID for the ground station (GCS).</summary>
         public const byte MavSysId = 255;
@@ -70,6 +78,8 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
         /// <summary>Default baud rate for MAVLink communication.</summary>
         public const int MavlinkBaudRate = 115200;
 
+        //----------------Bootloader Info Requests------------------
+
         /// <summary> Info request IDs for GET_DEVICE command </summary>
         public const byte InfoBoardId = 0x02;
 
@@ -84,6 +94,9 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
 
         /// <summary> Represents the revision number of the information block. </summary>
         public const byte InfoBlRev = 0x01;
+
+
+        //----------------Extra parameters----------------------------
 
         /// <summary>
         /// MAVLink command ID for flashing the bootloader.

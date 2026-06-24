@@ -87,6 +87,8 @@ namespace APConfigManager.Infrastructure.Transport
         /// <summary>
         /// Waits for a new COM port to appear that is not in the list of existing ports.
         /// </summary>
+        /// <param name="existingPorts">The list of existing ports to compare against.</param>
+        /// <param name="timeout">The maximum time to wait for a new port to appear.</param>
         public async Task<string?> WaitForNewPortAsync(
             List<string> existingPorts,
             TimeSpan timeout,
@@ -269,7 +271,6 @@ namespace APConfigManager.Infrastructure.Transport
                         return arr[0];
                     }
                 }
-
             }
             catch
             {
