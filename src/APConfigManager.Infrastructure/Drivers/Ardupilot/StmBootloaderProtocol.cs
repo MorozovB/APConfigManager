@@ -11,13 +11,12 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
     /// </summary>
     public class StmBootloaderProtocol : IBootloaderProtocol
     {
-        public readonly ISerialPortAdapter port;
+        private readonly ISerialPortAdapter port;
 
 
         public StmBootloaderProtocol(ISerialPortAdapter port)
         {
             this.port = port;
-
         }
 
         /// <summary>
@@ -48,6 +47,7 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
                     var response = new byte[2];
                     var bytesRead = 0;
 
+                    // Wait for response with a timeout. While loop to read exactly 2 bytes, handling partial reads.
                     while (bytesRead < 2)
                     {
                         var read = await port.ReadAsync(response, bytesRead, 2 - bytesRead, ct);
@@ -71,6 +71,7 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
                 {
                     // Ignore timeout and retry
                 }
+
                 port.Purge();
                 await Task.Delay(100, ct);
             }
