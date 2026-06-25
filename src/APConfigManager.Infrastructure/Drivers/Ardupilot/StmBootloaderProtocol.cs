@@ -51,10 +51,12 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
                     while (bytesRead < 2)
                     {
                         var read = await port.ReadAsync(response, bytesRead, 2 - bytesRead, ct);
+
                         if (read == 0)
                         {
                             break;
                         }
+
                         bytesRead += read;
                     }
 
@@ -85,7 +87,9 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
         public async Task<DeviceInfo> GetDeviceInfoAsync(CancellationToken ct)
         {
             if (!await SyncAsync(ct))
+            {
                 throw new BootloaderException("Bootloader sync failed before reading device info.");
+            }   
 
             var boardId = await ReadRegisterAsync(ArduPilotConstants.GET_DEVICE, ArduPilotConstants.InfoBoardId, ct);
             var boardRevision = await ReadRegisterAsync(ArduPilotConstants.GET_DEVICE, ArduPilotConstants.InfoBoardRev, ct);
@@ -118,6 +122,7 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cts.CancelAfter(ArduPilotConstants.EraseTimeoutMs);
 
+            // Wait for response with a timeout. While loop to read exactly 2 bytes, handling partial reads.
             try
             {
                 while (bytesRead < 2)
@@ -132,7 +137,7 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {
-                throw new BootloaderException($"Chip erase timed out after {ArduPilotConstants.EraseTimeoutMs}");
+                throw new BootloaderException($"Chip erase timed out after {ArduPilotConstants.EraseTimeoutMs} ms");
             }
 
             CheckResponse(response);
@@ -145,7 +150,7 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
         {
             if (data.Length > ArduPilotConstants.ProgMultiMaxSize)
             {
-                throw new ArgumentException($"Chunk size {data.Length} exceeds maximum of {ArduPilotConstants.ProgMultiMaxSize} bytes.\"");
+                throw new ArgumentException($"Chunk size {data.Length} exceeds maximum of {ArduPilotConstants.ProgMultiMaxSize} bytes.");
             }
 
             // Packet format: [PROG_MULTI, length, data..., EOC]
@@ -234,6 +239,7 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cts.CancelAfter(3000);
 
+            // Wait for response with a timeout. While loop to read exactly 6 bytes, handling partial reads.
             try
             {
                 while (bytesRead < 6)
