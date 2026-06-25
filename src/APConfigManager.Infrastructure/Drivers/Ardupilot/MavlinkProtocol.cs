@@ -1,9 +1,6 @@
-using System.IO;
-using System.Text;
 using APConfigManager.Core.Interfaces.Drivers;
 using APConfigManager.Core.Models;
 using APConfigManager.Core.Interfaces.Transport;
-using APConfigManager.Infrastructure.Drivers.Ardupilot;
 using static MAVLink;
 
 namespace APConfigManager.Infrastructure.Drivers.Ardupilot;
@@ -193,10 +190,10 @@ public class MavLinkProtocol : ITelemetryProtocol
     /// <summary>
     /// Sets a single parameter on the autopilot via PARAM_SET.
     /// </summary>
-    public async Task<bool> SetParamAsync(Parameter param, CancellationToken ct)
+    public async Task<bool> SetParamAsync(Parameter parameter, CancellationToken ct)
     {
         var paramId = new byte[16];
-        var nameBytes = System.Text.Encoding.ASCII.GetBytes(param.Name);
+        var nameBytes = System.Text.Encoding.ASCII.GetBytes(parameter.Name);
         Array.Copy(nameBytes, paramId, Math.Min(nameBytes.Length, 16));
 
         var paramSet = new mavlink_param_set_t
@@ -204,8 +201,8 @@ public class MavLinkProtocol : ITelemetryProtocol
             target_system = 1,
             target_component = 1,
             param_id = paramId,
-            param_value = param.Value,
-            param_type = param.ParamType
+            param_value = parameter.Value,
+            param_type = parameter.ParamType
         };
 
         var packet = parser.GenerateMAVLinkPacket10(
@@ -227,12 +224,12 @@ public class MavLinkProtocol : ITelemetryProtocol
         var confirmed = (mavlink_param_value_t)response.data;
         var confirmedName = System.Text.Encoding.ASCII.GetString(confirmed.param_id).TrimEnd('\0');
 
-        if (!confirmedName.Equals(param.Name, StringComparison.OrdinalIgnoreCase))
+        if (!confirmedName.Equals(parameter.Name, StringComparison.OrdinalIgnoreCase))
             return false;
 
-        if (Math.Abs(confirmed.param_value - param.Value) > 0.001f)
+        if (Math.Abs(confirmed.param_value - parameter.Value) > 0.001f)
         {
-            Console.WriteLine($"  Note: {param.Name} sent={param.Value}, device stored={confirmed.param_value}");
+            Console.WriteLine($"  Note: {parameter.Name} sent={parameter.Value}, device stored={confirmed.param_value}");
         }
 
         return true;
