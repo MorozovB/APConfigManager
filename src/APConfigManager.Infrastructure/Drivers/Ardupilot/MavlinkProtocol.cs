@@ -125,9 +125,11 @@ public class MavLinkProtocol : ITelemetryProtocol
                 var msg = await ReadMessageAsync(ct);
 
                 if (msg?.data is null)
+                {
                     continue;
+                }
 
-                // Keep heartbeat stream alive during long param reads
+                // Keep heartbeat stream alive during long param reads.
                 if (msg.msgid == (uint)MAVLINK_MSG_ID.HEARTBEAT)
                 {
                     await SendHeartbeatAsync(ct);
@@ -135,7 +137,9 @@ public class MavLinkProtocol : ITelemetryProtocol
                 }
 
                 if (msg.msgid != (uint)MAVLINK_MSG_ID.PARAM_VALUE)
+                {
                     continue;
+                }
 
                 var paramValue = (mavlink_param_value_t)msg.data;
                 var name = System.Text.Encoding.ASCII
@@ -164,16 +168,20 @@ public class MavLinkProtocol : ITelemetryProtocol
                 $"received {parameters.Count}/{totalExpected}");
 
             if (parameters.Count > 0 && parameters.Count >= totalExpected)
+            {
                 break;
+            }
 
-            // Partial read — request only missing indices before next attempt
+            // Partial read — request only missing indices before next attempt.
             if (parameters.Count > 0 && totalExpected > 0)
             {
                 Console.WriteLine($"RequestAllParams: partial read, requesting missing...");
                 await RequestMissingParamsAsync(parameters, totalExpected, ct);
 
                 if (parameters.Count >= totalExpected)
+                {
                     break;
+                }
             }
 
             await Task.Delay(2000, ct);
@@ -181,6 +189,7 @@ public class MavLinkProtocol : ITelemetryProtocol
 
         Console.WriteLine($"RequestAllParams: final {parameters.Count}/{totalExpected}");
 
+        // Remove duplicates by name, keeping the last received value.
         return parameters
             .GroupBy(p => p.Name)
             .Select(g => g.Last())
@@ -192,6 +201,7 @@ public class MavLinkProtocol : ITelemetryProtocol
     /// </summary>
     public async Task<bool> SetParamAsync(Parameter parameter, CancellationToken ct)
     {
+        
         var paramId = new byte[16];
         var nameBytes = System.Text.Encoding.ASCII.GetBytes(parameter.Name);
         Array.Copy(nameBytes, paramId, Math.Min(nameBytes.Length, 16));
@@ -219,14 +229,20 @@ public class MavLinkProtocol : ITelemetryProtocol
             ct);
 
         if (response is null)
+        {
             return false;
+        }
 
         var confirmed = (mavlink_param_value_t)response.data;
         var confirmedName = System.Text.Encoding.ASCII.GetString(confirmed.param_id).TrimEnd('\0');
 
+        // Check that the confirmed parameter matches the one we set
         if (!confirmedName.Equals(parameter.Name, StringComparison.OrdinalIgnoreCase))
+        {
             return false;
+        }
 
+        // Check that the confirmed value is close to the one we set
         if (Math.Abs(confirmed.param_value - parameter.Value) > 0.001f)
         {
             Console.WriteLine($"  Note: {parameter.Name} sent={parameter.Value}, device stored={confirmed.param_value}");
