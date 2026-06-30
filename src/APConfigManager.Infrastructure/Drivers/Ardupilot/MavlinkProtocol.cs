@@ -459,7 +459,9 @@ public class MavLinkProtocol : ITelemetryProtocol
                 var msg = await ReadMessageAsync(cts.Token);
 
                 if (msg is null)
+                {
                     continue;
+                }
 
                 if (msg.msgid == (uint)MAVLINK_MSG_ID.STATUSTEXT)
                 {
@@ -482,42 +484,12 @@ public class MavLinkProtocol : ITelemetryProtocol
     }
 
     /// <summary>
-    /// Reads telemetry data in a loop, invoking the provided callback with the altitude value whenever a new telemetry message is received.
-    /// </summary>
-    public async Task ReadTelemetryLoopAsync(Action<float> onAltitude, CancellationToken ct)
-    {
-        while (!ct.IsCancellationRequested)
-        {
-            try
-            {
-                var msg = await ReadMessageAsync(ct);
-                if (msg is null) continue;
-
-                if (msg.msgid == (uint)MAVLINK_MSG_ID.GLOBAL_POSITION_INT)
-                {
-                    var pos = (mavlink_global_position_int_t)msg.data;
-                    var altitudeM = pos.relative_alt / 1000.0f;
-                    onAltitude(altitudeM);
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
-            catch
-            {
-                await Task.Delay(100, ct);
-            }
-        }
-    }
-
-
-    /// <summary>
     /// Reads and parses a single MAVLink message from the port.
     /// </summary>
     private async Task<MAVLinkMessage?> ReadMessageAsync(CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
+
         try
         {
             var msg = await Task.Run(() =>
@@ -531,6 +503,7 @@ public class MavLinkProtocol : ITelemetryProtocol
                     return null;
                 }
             });
+
             ct.ThrowIfCancellationRequested();
             return msg;
         }
@@ -568,7 +541,9 @@ public class MavLinkProtocol : ITelemetryProtocol
                 consecutiveErrors = 0;
 
                 if (msg.data is null)
+                {
                     continue;
+                }
 
                 if (msg.msgid == (uint)MAVLINK_MSG_ID.GLOBAL_POSITION_INT)
                 {
@@ -618,20 +593,26 @@ public class MavLinkProtocol : ITelemetryProtocol
                 var msg = await ReadMessageAsync(cts.Token);
 
                 if (msg is null)
+                {
                     continue;
+                }
 
                 if (msg.data is null)
+                {
                     continue;
+                }
 
                 if (msg.msgid == (uint)messageId)
+                {
                     return msg;
+                }  
             }
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
             return null;
         }
-    }
+    } 
 
     /// <summary>
     /// Requests individual missing parameters by index.
@@ -651,7 +632,7 @@ public class MavLinkProtocol : ITelemetryProtocol
             ct.ThrowIfCancellationRequested();
 
             // Request by index
-            var reqSingle = new mavlink_param_request_read_t
+            var command = new mavlink_param_request_read_t
             {
                 target_system    = 1,
                 target_component = 1,
@@ -659,15 +640,15 @@ public class MavLinkProtocol : ITelemetryProtocol
                 param_id         = new byte[16]
             };
 
-            var pkt = parser.GenerateMAVLinkPacket10(
+            var packet = parser.GenerateMAVLinkPacket10(
                 MAVLINK_MSG_ID.PARAM_REQUEST_READ,
-                reqSingle,
+                command,
                 ArduPilotConstants.MavSysId,
                 ArduPilotConstants.MavCompId);
 
-            await port.WriteAsync(pkt, 0, pkt.Length, ct);
+            await port.WriteAsync(packet, 0, packet.Length, ct);
 
-            // Wait up to 500 ms for this specific param
+            // Wait up to 500 ms for this specific param 
             var deadline = DateTime.UtcNow.AddMilliseconds(500);
             while (DateTime.UtcNow < deadline)
             {
