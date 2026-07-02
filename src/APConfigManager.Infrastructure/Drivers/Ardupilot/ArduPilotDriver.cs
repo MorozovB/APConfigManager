@@ -277,8 +277,11 @@ public class ArduPilotDriver : IAutopilotDriver
         try
         {
             var fwVer = await telemetry.GetFirmwareVersionAsync(ct);
+
             if (session is not null && !string.IsNullOrWhiteSpace(fwVer))
+            {
                 session.FirmwareVersion = fwVer;
+            }
         }
         catch { }
 
@@ -349,12 +352,17 @@ public class ArduPilotDriver : IAutopilotDriver
             // Pad firmware to 4-byte alignment (bootloader CRC covers padded area)
             var imageToFlash = firmware.ImageBytes;
             var alignRemainder = imageToFlash.Length % 4;
+
             if (alignRemainder != 0)
             {
                 imageToFlash = new byte[imageToFlash.Length + (4 - alignRemainder)];
+
                 Array.Copy(firmware.ImageBytes, imageToFlash, firmware.ImageBytes.Length);
+
                 for (var i = firmware.ImageBytes.Length; i < imageToFlash.Length; i++)
+                {
                     imageToFlash[i] = 0xFF;
+                }
             }
 
             var deviceInfo = await bootloader.GetDeviceInfoAsync(ct);
@@ -378,9 +386,11 @@ public class ArduPilotDriver : IAutopilotDriver
                 await this.bootloader.ProgramMultiAsync(chunk, ct);
                 bytesWritten += size;
 
+                // Report progress as 0-80% for writing phase. 
                 var percent = (int)(80.0 * bytesWritten / totalBytes);
                 var prevPercent = (int)(80.0 * (bytesWritten - size) / totalBytes);
 
+                // Only report if percent increased to avoid flooding progress updates
                 if (percent > prevPercent)
                 {
                     progress.Report((percent, $"Writing {bytesWritten}/{totalBytes}"));
