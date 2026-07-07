@@ -523,15 +523,15 @@ public class ArduPilotDriver : IAutopilotDriver
             await telemetry.RebootNormalAsync(ct);
             port.Close();
             await ReconnectAfterBootAsync(ct);
-            Console.WriteLine("Parameters reset. Reading current state...");
 
-            Console.WriteLine("Reading parameters from device...");
             var deviceParams = await telemetry.RequestAllParamsAsync(ct);
 
+            // Build a dictionary of device parameters for quick lookup by name.
             var deviceMap = deviceParams
                  .GroupBy(p => p.Name)
                  .ToDictionary(g => g.Key, g => g.Last().Value);
 
+            // Build a dictionary of device parameter types for quick lookup by name.
             var deviceTypeMap = deviceParams
                 .GroupBy(p => p.Name)
                 .ToDictionary(g => g.Key, g => g.Last().ParamType);
@@ -584,12 +584,6 @@ public class ArduPilotDriver : IAutopilotDriver
                 toUpload.Add(typedParam);
             }
 
-            Console.WriteLine($"To upload: {toUpload.Count}, same: {skippedSame}, " +
-                $"missing: {missing.Count}, read-only: {skippedReadOnly}, " +
-                $"auto-calc: {skippedAutoCalc}");
-
-            Console.WriteLine($"To upload: {toUpload.Count}, same: {skippedSame}, missing: {missing.Count}");
-
             if (toUpload.Count == 0 && missing.Count == 0)
             {
                 progress.Report((parameters.Count, parameters.Count));
@@ -603,7 +597,7 @@ public class ArduPilotDriver : IAutopilotDriver
                 };
             }
 
-            var pending = new List<Parameter>(toUpload);
+            var pending = new List<Parameter>(toUpload); 
             var previousPendingCount = -1;
 
             for (var pass = 1; pass <= WriteParamsPasses && pending.Count > 0; pass++)
@@ -625,19 +619,16 @@ public class ArduPilotDriver : IAutopilotDriver
                     ct.ThrowIfCancellationRequested();
 
                     var confirmed = await telemetry.SetParamAsync(param, ct);
+
                     if (confirmed)
                     {
                         sent++;
-                        Console.WriteLine($"  OK: {param.Name} = {param.Value}");
                     }
                     else
                     {
                         failed.Add(param);
-                        Console.WriteLine($"  FAIL: {param.Name}");
                     }
 
-                    var totalProcessed = parameters.Count - failed.Count -
-                        (pending.Count - failed.Count - (pending.IndexOf(param) + 1));
                     progress.Report((sent + skippedSame, parameters.Count));
 
                     await Task.Delay(50, ct);
@@ -646,7 +637,9 @@ public class ArduPilotDriver : IAutopilotDriver
                 pending = failed;
 
                 if (pending.Count == 0 && missing.Count == 0)
+                {
                     break;
+                }
 
                 // Reboot to apply params (some depend on others)
                 if (pass < WriteParamsPasses && (pending.Count > 0 || (pass == 1 && missing.Count > 0)))
@@ -670,19 +663,20 @@ public class ArduPilotDriver : IAutopilotDriver
 
                     // Check if pending params applied after reboot
                     var stillPending = new List<Parameter>();
+
                     foreach (var param in pending)
                     {
                         if (deviceMap.TryGetValue(param.Name, out var val)
                             && Math.Abs(val - param.Value) < 0.001f)
                         {
                             sent++;
-                            Console.WriteLine($"  Applied after reboot: {param.Name}");
                         }
                         else
                         {
                             stillPending.Add(param);
                         }
                     }
+
                     pending = stillPending;
 
                     // Check missing — some might now exist after reboot
@@ -699,12 +693,10 @@ public class ArduPilotDriver : IAutopilotDriver
                                 if (Math.Abs(deviceMap[param.Name] - param.Value) < 0.001f)
                                 {
                                     skippedSame++;
-                                    Console.WriteLine($"  Missing now matches: {param.Name}");
                                 }
                                 else
                                 {
                                     nowExists.Add(param);
-                                    Console.WriteLine($"  Missing now exists: {param.Name}");
                                 }
                             }
                             else
@@ -717,11 +709,11 @@ public class ArduPilotDriver : IAutopilotDriver
                         pending.AddRange(nowExists);
                     }
 
-                    Console.WriteLine($"After reboot: {pending.Count} pending, {missing.Count} missing");
+                    // Console.WriteLine($"After reboot: {pending.Count} pending, {missing.Count} missing");
                 }
             }
 
-            Console.WriteLine($"Done: sent={sent}, same={skippedSame}, missing={missing.Count}, failed={pending.Count}");
+            //Console.WriteLine($"Done: sent={sent}, same={skippedSame}, missing={missing.Count}, failed={pending.Count}");
 
             if (onAltitudeUpdate != null)
             {
