@@ -960,6 +960,9 @@ public class ArduPilotDriver : IAutopilotDriver
         }
     }
 
+    /// <summary>
+    /// Starts a background task to read telemetry (altitude) from the autopilot.
+    /// </summary>
     public void StartTelemetry(Action<float> onAltitude)
     {
         StopTelemetrySync();
@@ -991,6 +994,9 @@ public class ArduPilotDriver : IAutopilotDriver
         });
     }
 
+    /// <summary>
+    /// Stops the telemetry background task and cancels it. Waits for the task to complete.
+    /// </summary>
     private void StopTelemetrySync()
     {
         if (telemetryCts is null) return;
@@ -1011,9 +1017,14 @@ public class ArduPilotDriver : IAutopilotDriver
         telemetryTask = null;
 
         if (port.IsOpen)
+        {
             port.Purge();
+        }
     }
 
+    /// <summary>
+    /// Stops the telemetry background task and cancels it. Waits asynchronously for the task to complete.
+    /// </summary>
     public async Task StopTelemetryAsync()
     {
         if (telemetryCts is null) return;
@@ -1053,13 +1064,14 @@ public class ArduPilotDriver : IAutopilotDriver
         {
             if (mode == BootMode.Bootloader)
             {
-                StopTelemetryAsync();
+                await StopTelemetryAsync();
                 port.Purge();
             }
             return;
         }
 
         var rebootResult = await RebootAsync(mode, ct);
+
         if (!rebootResult.Success)
         {
             throw new DeviceConnectionException(
@@ -1109,17 +1121,25 @@ public class ArduPilotDriver : IAutopilotDriver
         }
     }
 
+    /// <summary>
+    /// Calculates the expected CRC32 of the firmware image,
+    /// including padding to 4-byte alignment and filling remaining flash with 0xFF.
+    /// </summary>
     private static uint CalculateFirmwareCrc(byte[] imageBytes, uint flashSize)
     {
         // Align image to 4 bytes
         var aligned = imageBytes;
         var remainder = aligned.Length % 4;
+
         if (remainder != 0)
         {
             aligned = new byte[aligned.Length + (4 - remainder)];
             Array.Copy(imageBytes, aligned, imageBytes.Length);
+
             for (var i = imageBytes.Length; i < aligned.Length; i++)
+            {
                 aligned[i] = 0xFF;
+            }
         }
 
         // CRC over firmware bytes
@@ -1127,11 +1147,16 @@ public class ArduPilotDriver : IAutopilotDriver
 
         // Continue CRC over remaining flash (filled with 0xFF)
         for (var i = aligned.Length; i < flashSize - 1; i += 4)
+        {
             state = Crc32(CrcPad, state);
+        }
 
         return state;
     }
 
+    /// <summary>
+    /// Calculates the CRC32 of the given data starting from the specified state.
+    /// </summary>
     private static uint Crc32(byte[] data, uint state)
     {
         foreach (var b in data)
