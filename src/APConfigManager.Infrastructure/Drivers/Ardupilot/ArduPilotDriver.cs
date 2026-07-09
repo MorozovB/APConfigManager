@@ -179,7 +179,7 @@ public class ArduPilotDriver : IAutopilotDriver
         }
 
         var portInfo = this.portScanner.GetPortDescription(port);
-        this.currentMode = currentMode;
+        // this.currentMode = currentMode;
 
         var state = this.currentMode == BootMode.Bootloader
             ? DeviceState.InBootloader
@@ -314,7 +314,9 @@ public class ArduPilotDriver : IAutopilotDriver
         {
             var synced = await bootloader.SyncAsync(ct);
             if (!synced)
+            {
                 throw new DeviceConnectionException("Bootloader sync failed.");
+            }
         }
 
         return await bootloader.GetDeviceInfoAsync(ct);
@@ -492,6 +494,7 @@ public class ArduPilotDriver : IAutopilotDriver
     {
         EnsureConnected();
         await EnsureModeAsync(BootMode.Normal, ct);
+
         return await this.telemetry.RequestAllParamsAsync(ct);
     }
 
@@ -885,8 +888,6 @@ public class ArduPilotDriver : IAutopilotDriver
 
         try
         {
-            Console.WriteLine("Updating bootloader...");
-
             var success = await telemetry.FlashBootloaderAsync(ct);
 
             if (!success)
@@ -936,12 +937,18 @@ public class ArduPilotDriver : IAutopilotDriver
         }
     }
 
+    /// <summary>
+    /// Disconnects from the device, stops telemetry, and closes the serial port.
+    /// </summary>
+    /// <returns></returns>
     public async Task DisconnectAsync()
     {
         await StopTelemetryAsync();
 
         if (this.port.IsOpen)
+        {
             this.port.Close();
+        }
 
         session = null;
         currentMode = BootMode.Normal;
@@ -1167,29 +1174,43 @@ public class ArduPilotDriver : IAutopilotDriver
         return state;
     }
 
+    /// <summary>
+    /// Checks if a parameter name is considered read-only based on known prefixes.
+    /// </summary>
     private static bool IsReadOnly(string paramName)
     {
         if (ReadOnlyPrefixes.Contains(paramName))
+        {
             return true;
+        }
 
         foreach (var prefix in ReadOnlyPrefixes)
         {
             if (prefix.EndsWith("_") && paramName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
                 return true;
+            }
         }
 
         return false;
     }
 
+    /// <summary>
+    /// Checks if a parameter name is considered auto-calculated based on known prefixes.
+    /// </summary>
     private static bool IsAutoCalculated(string paramName)
     {
         if (AutoCalculatedPrefixes.Contains(paramName))
+        {
             return true;
+        }
 
         foreach (var prefix in AutoCalculatedPrefixes)
         {
             if (prefix.EndsWith("_") && paramName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
                 return true;
+            }
         }
 
         return false;
