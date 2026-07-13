@@ -16,7 +16,7 @@ public class ArduPilotDriver : IAutopilotDriver
     private const int ChunkSize = ArduPilotConstants.ProgMultiMaxSize; // 64 bytes per write
     private const int HeartbeatTimeoutMs = 3000;
     private const int PortSwitchTimeoutSeconds = 20;
-    private const int WriteParamsPasses = 3;
+    private const int WriteParamsPasses = 6;
     private Action? onDeviceDisconnected;
     private readonly Func<Guid?, List<string>>? getOccupiedPorts;
 

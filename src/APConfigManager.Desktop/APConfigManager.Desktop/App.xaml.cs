@@ -69,15 +69,12 @@ namespace APConfigManager.Desktop
                     {
                         FileName = apiExe,
                         WorkingDirectory = Path.GetDirectoryName(apiExe)!,
-                        UseShellExecute = true,
-                        CreateNoWindow = false
+                        UseShellExecute = false,
+                        CreateNoWindow = true
                     }
                 };
 
                 _apiProcess.Start();
-                File.WriteAllText(
-                    @"C:\Temp\api_started.txt",
-                    $"PID={_apiProcess.Id}");
             }
             catch (Exception ex)
             {
