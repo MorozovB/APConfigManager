@@ -292,3 +292,5 @@ dotnet_diagnostic.SA1633.severity = none      # FileMustHaveHeader
 dotnet_diagnostic.S1066.severity = none
 dotnet_diagnostic.CA1707.severity = none
 Dotnet_diagnostic.VSSpell001.severity = none
+dotnet_diagnostic.CA1032.severity = none
+dotnet_diagnostic.CA1725.severity = none
