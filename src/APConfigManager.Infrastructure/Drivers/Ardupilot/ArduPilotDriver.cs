@@ -57,6 +57,22 @@ public class ArduPilotDriver : IAutopilotDriver
         "BARO2_WCF_",
     };
 
+    private static readonly string[] FinalForceParams =
+    {
+        "COMPASS_EXTERNAL",
+    };
+
+    private static readonly string[] PriorityPrefixes =
+    {
+        "CAN_D1_PROTOCOL",
+        "CAN_D2_PROTOCOL",
+        "CAN_P1_DRIVER",
+        "CAN_P2_DRIVER",
+        "GPS_TYPE",
+        "SERIAL",
+        "BRD_",
+    };
+
     private static readonly byte[] CrcPad = { 0xFF, 0xFF, 0xFF, 0xFF };
 
     private static readonly uint[] CrcTable =
@@ -209,11 +225,11 @@ public class ArduPilotDriver : IAutopilotDriver
     /// </summary>
     private async Task ReconnectAfterBootAsync(CancellationToken ct)
     {
-        var oldPort     = session!.Port;
-        var oldSerial   = session.DeviceSerial;
+        var oldPort = session!.Port;
+        var oldSerial = session.DeviceSerial;
         var oldLocation = session.UsbLocation;
-        var sessionId   = session.Id;
-        var baudRate    = session.BaudRate;
+        var sessionId = session.Id;
+        var baudRate = session.BaudRate;
 
         // Strip the #USBMI(...) suffix — it changes between boot modes.
         // The stable part is everything up to the last #USBMI segment.
@@ -223,7 +239,7 @@ public class ArduPilotDriver : IAutopilotDriver
         await Task.Delay(2000, ct);
 
         var portsAfterBoot = portScanner.GetAvailablePorts();
-        var excludePorts   = getOccupiedPorts?.Invoke(sessionId) ?? new List<string>();
+        var excludePorts = getOccupiedPorts?.Invoke(sessionId) ?? new List<string>();
 
         string? targetPort = null;
 
@@ -262,7 +278,7 @@ public class ArduPilotDriver : IAutopilotDriver
         {
             throw new DeviceConnectionException("Device did not reappear after reboot.");
         }
-            
+
 
         port.Open(targetPort, baudRate);
         port.Purge();
@@ -293,8 +309,8 @@ public class ArduPilotDriver : IAutopilotDriver
             && newPortInfo is not null
             && !string.IsNullOrWhiteSpace(newPortInfo.DeviceSerial))
         {
-            session.DeviceSerial   = newPortInfo.DeviceSerial;
-            session.UsbLocation    = newPortInfo.LocationPath;
+            session.DeviceSerial = newPortInfo.DeviceSerial;
+            session.UsbLocation = newPortInfo.LocationPath;
         }
     }
 
@@ -568,7 +584,7 @@ public class ArduPilotDriver : IAutopilotDriver
                     continue;
                 }
 
-                if (Math.Abs(deviceValue - param.Value) < 0.001f)
+                if (AreParamsEqual(deviceValue, param.Value))
                 {
                     skippedSame++;
                     continue;
@@ -600,8 +616,9 @@ public class ArduPilotDriver : IAutopilotDriver
                 };
             }
 
-            var pending = new List<Parameter>(toUpload); 
+            var pending = new List<Parameter>(toUpload);
             var previousPendingCount = -1;
+            toUpload.Sort((a, b) => GetParamPriority(a.Name).CompareTo(GetParamPriority(b.Name)));
 
             for (var pass = 1; pass <= WriteParamsPasses && pending.Count > 0; pass++)
             {
@@ -717,6 +734,32 @@ public class ArduPilotDriver : IAutopilotDriver
             }
 
             //Console.WriteLine($"Done: sent={sent}, same={skippedSame}, missing={missing.Count}, failed={pending.Count}");
+
+            // Force-write params that get overwritten by device after reboots
+            var forceList = parameters
+                .Where(p => FinalForceParams.Any(f =>
+                    p.Name.Equals(f, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+
+            if (forceList.Count > 0)
+            {
+                Console.WriteLine($"Force-writing {forceList.Count} mandatory parameters...");
+
+                foreach (var param in forceList)
+                {
+                    ct.ThrowIfCancellationRequested();
+
+                    var typedParam = new Parameter
+                    {
+                        Name = param.Name,
+                        Value = param.Value,
+                        ParamType = deviceTypeMap.TryGetValue(param.Name, out var pt) ? pt : param.ParamType
+                    };
+
+                    var ok = await telemetry.SetParamAsync(typedParam, ct);
+                    await Task.Delay(30, ct);
+                }
+            }
 
             if (onAltitudeUpdate != null)
             {
@@ -1271,5 +1314,42 @@ public class ArduPilotDriver : IAutopilotDriver
 
         var idx = locationPath.LastIndexOf("#USBMI(", StringComparison.OrdinalIgnoreCase);
         return idx > 0 ? locationPath[..idx] : locationPath;
+    }
+
+    /// <summary>
+    /// Gets the priority of a parameter based on its name prefix.
+    /// </summary>
+    private static int GetParamPriority(string name)
+    {
+        for (var i = 0; i < PriorityPrefixes.Length; i++)
+        {
+            if (name.StartsWith(PriorityPrefixes[i], StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+        }
+
+        return 100;
+    }
+
+    /// <summary>
+    /// Compares two float values for equality with a tolerance to account for floating-point precision issues.
+    /// </summary>
+    private static bool AreParamsEqual(float a, float b)
+    {
+        if (a == b) return true;
+
+        var diff = Math.Abs(a - b);
+
+        // Additional figure for small values to avoid false negatives due to floating-point precision
+        if (Math.Abs(a) < 1f && Math.Abs(b) < 1f)
+        {
+            return diff < 0.00001f;
+        }
+
+        // To big values, use relative comparison
+        var max = Math.Max(Math.Abs(a), Math.Abs(b));
+
+        return diff / max < 0.00001f;
     }
 }
