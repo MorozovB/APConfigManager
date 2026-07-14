@@ -757,6 +757,7 @@ public class ArduPilotDriver : IAutopilotDriver
                     };
 
                     var ok = await telemetry.SetParamAsync(typedParam, ct);
+
                     await Task.Delay(30, ct);
                 }
             }
