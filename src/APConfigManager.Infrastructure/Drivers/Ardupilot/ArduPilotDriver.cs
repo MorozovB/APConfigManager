@@ -55,11 +55,22 @@ public class ArduPilotDriver : IAutopilotDriver
         "BARO3_GND_PRESS",
         "BARO1_WCF_",
         "BARO2_WCF_",
+        "SR0_EXT_STAT",
+        "SR0_EXTRA1",
+        "SR0_EXTRA2",
+        "SR0_EXTRA3",
+        "SR0_RAW_SENS",
+        "SR0_RC_CHAN",
     };
 
     private static readonly string[] FinalForceParams =
     {
         "COMPASS_EXTERNAL",
+    };
+
+    private static readonly string[] DeferredParams =
+    {
+        "ARMING_REQUIRE",
     };
 
     private static readonly string[] PriorityPrefixes =
@@ -578,6 +589,12 @@ public class ArduPilotDriver : IAutopilotDriver
                     continue;
                 }
 
+                // Skip deferred params (ARMING_REQUIRE, etc.) — these are applied after all others
+                if (DeferredParams.Any(d => param.Name.Equals(d, StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
+
                 if (!deviceMap.TryGetValue(param.Name, out var deviceValue))
                 {
                     missing.Add(param);
@@ -762,6 +779,80 @@ public class ArduPilotDriver : IAutopilotDriver
                 }
             }
 
+            try
+            {
+                await telemetry.RebootNormalAsync(ct);
+                port.Close();
+                await ReconnectAfterBootAsync(ct);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Final reboot failed: {ex.Message}");
+            }
+
+            // Write deferred params last (ARMING_REQUIRE etc.)
+            var deferredList = parameters
+                .Where(p => DeferredParams.Any(d =>
+                    p.Name.Equals(d, StringComparison.OrdinalIgnoreCase)))
+                .Where(p => deviceTypeMap.ContainsKey(p.Name))
+                .ToList();
+
+            if (deferredList.Count > 0)
+            {
+                foreach (var param in deferredList)
+                {
+                    ct.ThrowIfCancellationRequested();
+
+                    var typedParam = new Parameter
+                    {
+                        Name = param.Name,
+                        Value = param.Value,
+                        ParamType = deviceTypeMap.TryGetValue(param.Name, out var pt) ? pt : param.ParamType
+                    };
+
+                    var ok = await telemetry.SetParamAsync(typedParam, ct);
+
+                    if (ok)
+                    {
+                        sent++;
+                    }
+                    else
+                    {
+                        pending.Add(param);
+                    }
+
+                    progress.Report((sent + skippedSame, parameters.Count));
+                    await Task.Delay(30, ct);
+                }
+            }
+
+            // Final verification: read actual state from device
+            var verifyParams = await telemetry.RequestAllParamsAsync(ct);
+            var verifyMap = verifyParams
+                .GroupBy(p => p.Name)
+                .ToDictionary(g => g.Key, g => g.Last().Value);
+
+            var realFailed = 0;
+            foreach (var param in parameters)
+            {
+                if (IsReadOnly(param.Name) || IsAutoCalculated(param.Name))
+                    continue;
+
+                if (DeferredParams.Any(d => param.Name.Equals(d, StringComparison.OrdinalIgnoreCase)))
+                    continue;
+
+                if (FinalForceParams.Any(f => param.Name.Equals(f, StringComparison.OrdinalIgnoreCase)))
+                    continue;
+
+                if (!verifyMap.TryGetValue(param.Name, out var actualValue))
+                    continue;
+
+                if (!AreParamsEqual(actualValue, param.Value))
+                {
+                    realFailed++;
+                }
+            }
+
             if (onAltitudeUpdate != null)
             {
                 StartTelemetry(onAltitudeUpdate);
@@ -769,9 +860,9 @@ public class ArduPilotDriver : IAutopilotDriver
 
             return new ParameterUploadResult
             {
-                Success = pending.Count == 0,
+                Success = realFailed == 0,
                 Sent = sent,
-                Failed = pending.Count,
+                Failed = realFailed,
                 Hidden = missing.Count,
                 ReadOnly = skippedReadOnly + skippedAutoCalc,
                 Total = parameters.Count
