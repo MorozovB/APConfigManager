@@ -36,9 +36,10 @@ public class MavLinkProtocol : ITelemetryProtocol
             mavlink_version = 3
         };
 
-        var packet = parser.GenerateMAVLinkPacket10(
+        var packet = parser.GenerateMAVLinkPacket20(
             MAVLINK_MSG_ID.HEARTBEAT,
             heartbeat,
+            false,
             ArduPilotConstants.MavSysId,
             ArduPilotConstants.MavCompId);
 
@@ -59,9 +60,10 @@ public class MavLinkProtocol : ITelemetryProtocol
             param1 = 3
         };
 
-        var packet = parser.GenerateMAVLinkPacket10(
+        var packet = parser.GenerateMAVLinkPacket20(
             MAVLINK_MSG_ID.COMMAND_LONG,
             command,
+            false,
             ArduPilotConstants.MavSysId,
             ArduPilotConstants.MavCompId);
 
@@ -86,9 +88,10 @@ public class MavLinkProtocol : ITelemetryProtocol
             target_component = 1
         };
 
-        var packet = parser.GenerateMAVLinkPacket10(
+        var packet = parser.GenerateMAVLinkPacket20(
             MAVLINK_MSG_ID.PARAM_REQUEST_LIST,
             request,
+            false,
             ArduPilotConstants.MavSysId,
             ArduPilotConstants.MavCompId);
 
@@ -215,9 +218,10 @@ public class MavLinkProtocol : ITelemetryProtocol
             param_type = parameter.ParamType
         };
 
-        var packet = parser.GenerateMAVLinkPacket10(
+        var packet = parser.GenerateMAVLinkPacket20(
             MAVLINK_MSG_ID.PARAM_SET,
             paramSet,
+            false,
             ArduPilotConstants.MavSysId,
             ArduPilotConstants.MavCompId);
 
@@ -271,9 +275,10 @@ public class MavLinkProtocol : ITelemetryProtocol
             param1 = (uint)MAVLINK_MSG_ID.AUTOPILOT_VERSION
         };
 
-        var packet = parser.GenerateMAVLinkPacket10(
+        var packet = parser.GenerateMAVLinkPacket20(
             MAVLINK_MSG_ID.COMMAND_LONG,
             command,
+            false,
             ArduPilotConstants.MavSysId,
             ArduPilotConstants.MavCompId);
 
@@ -333,9 +338,10 @@ public class MavLinkProtocol : ITelemetryProtocol
             param1 = 2
         };
 
-        var packet = parser.GenerateMAVLinkPacket10(
+        var packet = parser.GenerateMAVLinkPacket20(
             MAVLINK_MSG_ID.COMMAND_LONG,
             command,
+            false,
             ArduPilotConstants.MavSysId,
             ArduPilotConstants.MavCompId);
 
@@ -354,9 +360,10 @@ public class MavLinkProtocol : ITelemetryProtocol
             param1 = 1  // 1 = normal reboot, NOT bootloader
         };
 
-        var packet = parser.GenerateMAVLinkPacket10(
+        var packet = parser.GenerateMAVLinkPacket20(
             MAVLINK_MSG_ID.COMMAND_LONG,
             command,
+            false,
             ArduPilotConstants.MavSysId,
             ArduPilotConstants.MavCompId);
 
@@ -392,9 +399,10 @@ public class MavLinkProtocol : ITelemetryProtocol
             param7 = 0
         };
 
-        var packet = parser.GenerateMAVLinkPacket10(
+        var packet = parser.GenerateMAVLinkPacket20(
             MAVLINK_MSG_ID.COMMAND_LONG,
             command,
+            false,
             ArduPilotConstants.MavSysId,
             ArduPilotConstants.MavCompId);
 
@@ -640,9 +648,10 @@ public class MavLinkProtocol : ITelemetryProtocol
                 param_id         = new byte[16]
             };
 
-            var packet = parser.GenerateMAVLinkPacket10(
+            var packet = parser.GenerateMAVLinkPacket20(
                 MAVLINK_MSG_ID.PARAM_REQUEST_READ,
                 command,
+                false,
                 ArduPilotConstants.MavSysId,
                 ArduPilotConstants.MavCompId);
 
