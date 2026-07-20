@@ -15,11 +15,11 @@ public class SessionManager : ISessionManager, IAsyncDisposable
     private const int MaxSessions = 4;
 
     private readonly Dictionary<Guid, DeviceSession> sessions = new();
+
     private readonly Dictionary<Guid, IAutopilotDriver> drivers = new();
     private readonly object _stateLock = new();
     private readonly SemaphoreSlim _lock = new(1, 1);
     private readonly Func<IAutopilotDriver> driverFactory;
-    private readonly Dictionary<Guid, Action<float>> telemetryCallbacks = new();
 
     /// <summary>
     /// Initializes the session manager with a driver factory.
@@ -145,18 +145,24 @@ public class SessionManager : ISessionManager, IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Sets a telemetry callback for the specified session.
+    /// The callback will be invoked with altitude updates.
+    /// </summary>
     public void SetTelemetryCallback(Guid sessionId, Action<float> onAltitude)
     {
         IAutopilotDriver? driver;
         lock (_stateLock)
         {
-            telemetryCallbacks[sessionId] = onAltitude;
             drivers.TryGetValue(sessionId, out driver);
         }
 
         driver?.StartTelemetry(onAltitude);
     }
 
+    /// <summary>
+    /// Session manager can sync the session state from the driver if needed.
+    /// </summary>
     public void SyncSessionFromDriver(Guid sessionId)
     {
         IAutopilotDriver? driver;
@@ -180,6 +186,9 @@ public class SessionManager : ISessionManager, IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Gets a list of occupied ports, optionally excluding a specific session ID.
+    /// </summary>
     public List<string> GetOccupiedPorts(Guid? excludeSessionId = null)
     {
         lock (_stateLock)
