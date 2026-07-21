@@ -63,7 +63,7 @@ namespace APConfigManager.Infrastructure.Parsers
                         continue;
                     }
 
-                    string[] parts = trimmedLine.Split(',');
+                    string[] parts = trimmedLine.Split(',', ' ', '\t');
 
                     if (parts.Length < 2)
                     {
@@ -91,11 +91,11 @@ namespace APConfigManager.Infrastructure.Parsers
                         Name = name,
                         Value = value
                     });
+                }
 
-                    if (result.Count == 0)
-                    {
-                        throw new ParamParseException("File doesn't have any parameters!");
-                    }
+                if (result.Count == 0)
+                {
+                    throw new ParamParseException("File doesn't have any parameters!");
                 }
             }
             catch (Exception ex) when (ex is not ParamParseException)

@@ -1,4 +1,3 @@
-using System;
 using System.IO.Compression;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -27,7 +26,7 @@ namespace APConfigManager.Infrastructure.Parsers
         {
             if (!File.Exists(filePath))
             {
-                throw new ApjParseException($"File {filePath} doesn't exists");
+                throw new ApjParseException($"File {filePath} doesn't exist");
             }
 
             try
@@ -74,7 +73,7 @@ namespace APConfigManager.Infrastructure.Parsers
             {
                 root = JsonNode.Parse(json) ?? throw new ApjParseException("File is empty or not JSON");
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not ApjParseException)
             {
                 throw new ApjParseException($"JSON isn't valid: {ex.Message}", ex);
             }
@@ -83,7 +82,7 @@ namespace APConfigManager.Infrastructure.Parsers
             var magic = root["magic"]?.GetValue<string>()
                 ?? throw new ApjParseException($"The field 'magic' is missing");
 
-            if ( magic != ExpectedMagic )
+            if (magic != ExpectedMagic)
             {
                 throw new ApjParseException($"Unexpected 'magic': '{magic}'. Expected: {ExpectedMagic}");
             }
@@ -115,7 +114,10 @@ namespace APConfigManager.Infrastructure.Parsers
             {
                 string extfBase64 = extfNode.GetValue<string>();
                 if (!string.IsNullOrEmpty(extfBase64))
+                {
                     extfBytes = DecodeBase64(extfBase64, "extf_image");
+                }
+                    
             }
 
             return new FirmwarePackage
@@ -145,7 +147,7 @@ namespace APConfigManager.Infrastructure.Parsers
             }
             catch (FormatException ex)
             {
-                throw new ApjParseException($"Field '{fileName}' doesn't include valid base64: {ex.Message}, ex");
+                throw new ApjParseException($"Field '{fileName}' doesn't include valid base64: {ex.Message}", ex);
 
             }
 
