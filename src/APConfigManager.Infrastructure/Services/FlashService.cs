@@ -47,6 +47,8 @@ public class FlashService : IFlashService
 
         var firmware = firmwareParser.Parse(firmwareFile);
 
+        await driver.StopTelemetryAsync();
+
         // Skip version check if device is in bootloader (no firmware to query)
         if (session.State != DeviceState.InBootloader)
         {
@@ -78,8 +80,6 @@ public class FlashService : IFlashService
             }
         }
 
-        await driver.StopTelemetryAsync();
-
         var deviceInfo = await driver.GetDeviceInfoAsync(ct);
 
         var validation = firmwareValidator.Validate(firmware, deviceInfo);
@@ -104,6 +104,10 @@ public class FlashService : IFlashService
         return result;
     }
 
+    /// <summary>
+    /// Metadata update after a successful flash.
+    /// Updates the session's firmware version and description based on the flashed firmware package and the result from the driver.
+    /// </summary>
     private static void UpdateSessionFirmwareMetadata(
         IAutopilotDriver driver,
         FirmwarePackage firmware,
@@ -136,6 +140,9 @@ public class FlashService : IFlashService
         }
     }
 
+    /// <summary>
+    /// Returns the first non-empty string from the provided values, or an empty string if all are null or whitespace.
+    /// </summary>
     private static string FirstNonEmpty(params string?[] values)
     {
         return values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? string.Empty;
