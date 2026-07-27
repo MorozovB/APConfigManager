@@ -1,4 +1,3 @@
-using APConfigManager.Core.Enums;
 using APConfigManager.Core.Exceptions;
 using APConfigManager.Core.Interfaces.Services;
 using APConfigManager.Core.Results;
@@ -6,7 +5,7 @@ using APConfigManager.Core.Results;
 namespace APConfigManager.Infrastructure.Services
 {
     /// <summary>
-    /// Orchestrates the flash memory erase cycle: reboot to bootloader, erase, boot.
+    /// Orchestrates the flash memory erase cycle: reboot to bootloader, erase.
     /// </summary>
     public class EraseService : IEraseService
     {
@@ -22,6 +21,8 @@ namespace APConfigManager.Infrastructure.Services
         /// </summary>
         public async Task<EraseResult> EraseAsync(Guid sessionId, IProgress<(int, string)> progress, CancellationToken ct)
         {
+            ArgumentNullException.ThrowIfNull(progress);
+
             var session = sessionManager.GetSession(sessionId);
 
             if (session is null)

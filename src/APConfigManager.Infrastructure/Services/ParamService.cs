@@ -5,81 +5,87 @@ using APConfigManager.Core.Models;
 using APConfigManager.Core.Results;
 using APConfigManager.Infrastructure.Parsers;
 
-namespace APConfigManager.Infrastructure.Services;
-
-/// <summary>
-/// Manages parameter upload (multi-pass), download, and reset operations.
-/// </summary>
-public class ParamService : IParamService
+namespace APConfigManager.Infrastructure.Services
 {
-    private readonly ISessionManager sessionManager;
-    private readonly IParamFileParser paramParser;
-
     /// <summary>
-    /// Initializes the parameter service.
+    /// Manages parameter upload (multi-pass), download, and reset operations.
     /// </summary>
-    public ParamService(ISessionManager sessionManager, IParamFileParser paramParser)
+    public class ParamService : IParamService
     {
-        this.sessionManager = sessionManager;
-        this.paramParser = paramParser;
-    }
+        private readonly ISessionManager sessionManager;
+        private readonly IParamFileParser paramParser;
 
-    /// <summary>
-    /// Parses the parameter file, then delegates upload to the driver.
-    /// The driver handles mode switching and multi-pass retry internally.
-    /// </summary>
-    public async Task<ParameterUploadResult> UploadAsync(
-        Guid sessionId,
-        Stream stream,
-        IProgress<(int percent, int total)> progress,
-        CancellationToken ct)
-    {
-        ArgumentNullException.ThrowIfNull(stream);
-        ArgumentNullException.ThrowIfNull(progress);
-
-        _ = sessionManager.GetSession(sessionId)
-            ?? throw new SessionException($"Session {sessionId} not found.");
-
-        var driver = sessionManager.GetDriver(sessionId);
-        var parameters = paramParser.Parse(stream);
-
-        var result = await driver.WriteParamsAsync(parameters, progress, ct);
-
-        if (result.Success)
+        /// <summary>
+        /// Initializes the parameter service.
+        /// </summary>
+        public ParamService(ISessionManager sessionManager, IParamFileParser paramParser)
         {
-            sessionManager.SyncSessionFromDriver(sessionId);
+            this.sessionManager = sessionManager;
+            this.paramParser = paramParser;
         }
 
-        return result;
-    }
+        /// <summary>
+        /// Parses the parameter file, then delegates upload to the driver.
+        /// The driver handles mode switching and multi-pass retry internally.
+        /// </summary>
+        public async Task<ParameterUploadResult> UploadAsync(
+            Guid sessionId,
+            Stream stream,
+            IProgress<(int percent, int total)> progress,
+            CancellationToken ct)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            ArgumentNullException.ThrowIfNull(progress);
 
-    /// <summary>
-    /// Reads all current parameters from the device.
-    /// The driver handles mode switching internally.
-    /// </summary>
-    public async Task<List<Parameter>> DownloadAsync(
-        Guid sessionId,
-        CancellationToken ct)
-    {
-        _ = sessionManager.GetSession(sessionId)
-            ?? throw new SessionException($"Session {sessionId} not found.");
+            _ = sessionManager.GetSession(sessionId)
+                ?? throw new SessionException($"Session {sessionId} not found.");
 
-        var driver = sessionManager.GetDriver(sessionId);
+            var driver = sessionManager.GetDriver(sessionId);
+            var parameters = paramParser.Parse(stream);
 
-        return await driver.ReadParamsAsync(ct);
-    }
+            var result = await driver.WriteParamsAsync(parameters, progress, ct);
 
-    /// <summary>
-    /// Resets all parameters to factory defaults via MAVLink command.
-    /// The driver handles mode switching and reboot internally.
-    /// </summary>
-    public async Task ResetAsync(Guid sessionId, CancellationToken ct)
-    {
-        _ = sessionManager.GetSession(sessionId)
-            ?? throw new SessionException($"Session {sessionId} not found.");
+            if (result.Success)
+            {
+                sessionManager.SyncSessionFromDriver(sessionId);
+            }
 
-        var driver = sessionManager.GetDriver(sessionId);
-        await driver.ResetParamsAsync(ct);
-        sessionManager.SyncSessionFromDriver(sessionId);
+            return result;
+        }
+
+        /// <summary>
+        /// Reads all current parameters from the device.
+        /// The driver handles mode switching internally.
+        /// </summary>
+        public async Task<List<Parameter>> DownloadAsync(
+            Guid sessionId,
+            CancellationToken ct)
+        {
+            _ = sessionManager.GetSession(sessionId)
+                ?? throw new SessionException($"Session {sessionId} not found.");
+
+            var driver = sessionManager.GetDriver(sessionId);
+
+            sessionManager.SyncSessionFromDriver(sessionId);
+
+            return await driver.ReadParamsAsync(ct);
+        }
+
+        /// <summary>
+        /// Resets all parameters to factory defaults via MAVLink command.
+        /// The driver handles mode switching and reboot internally.
+        /// </summary>
+        public async Task ResetAsync(Guid sessionId, CancellationToken ct)
+        {
+            _ = sessionManager.GetSession(sessionId)
+                ?? throw new SessionException($"Session {sessionId} not found.");
+
+            var driver = sessionManager.GetDriver(sessionId);
+            await driver.ResetParamsAsync(ct);
+
+            sessionManager.SyncSessionFromDriver(sessionId);
+        }
     }
 }
+
+
