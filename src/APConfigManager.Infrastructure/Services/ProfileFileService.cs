@@ -130,8 +130,7 @@ namespace APConfigManager.Infrastructure.Services
             {
                 var tried = string.Join("; ", GetCandidatePaths(profileFilesRoot, profileId, filePath));
                 throw new FileNotFoundException(
-                    $"{label} not found for '{filePath}'. Checked: {tried}. " +
-                    "Open the profile, set the full path (e.g. D:\\Firmware\\file.apj) or use Browse, then Save.");
+                    $"{label} not found for '{filePath}'. Checked: {tried}.");
             }
 
             var stream = new FileStream(
@@ -162,6 +161,8 @@ namespace APConfigManager.Infrastructure.Services
             string fileName,
             CancellationToken ct)
         {
+            ArgumentNullException.ThrowIfNull(content);
+
             var safeName = Path.GetFileName(fileName);
 
             if (string.IsNullOrWhiteSpace(safeName))
