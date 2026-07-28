@@ -32,7 +32,7 @@ builder.Services.AddCors(options =>
     });
 });
 
-// ─── Persistence ────────────────────────────────
+// ─── Data ────────────────────────────────
 var dbFolder = Path.Combine(
     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
     "APConfigManager");
@@ -59,8 +59,8 @@ builder.Services.AddSingleton<IFirmwareValidator, FirmwareValidator>();
 builder.Services.AddSingleton<ISessionManager>(sp =>
 {
     var portScanner = sp.GetRequiredService<IPortScanner>();
-
     SessionManager? manager = null;
+
     manager = new SessionManager(() =>
     {
         var port = new SerialPortAdapter();
@@ -70,6 +70,7 @@ builder.Services.AddSingleton<ISessionManager>(sp =>
             port, bootloader, telemetry, portScanner,
             excludeId => manager!.GetOccupiedPorts(excludeId));
     });
+
     return manager;
 });
 
@@ -159,7 +160,9 @@ static string? FindSourceUiDistPath(string startDirectory)
     {
         var path = Path.Combine(dir.FullName, "src", "APConfigManager.UI", "dist");
         if (Directory.Exists(path))
+        {
             return path;
+        }
 
         dir = dir.Parent;
     }
