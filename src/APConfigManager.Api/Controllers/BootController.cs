@@ -34,6 +34,7 @@ namespace APConfigManager.Api.Controllers
             CancellationToken ct)
         {
             var session = sessionManager.GetSession(sessionId);
+
             if (session is null)
             {
                 return NotFound(new OperationResultResponse
@@ -127,7 +128,7 @@ namespace APConfigManager.Api.Controllers
         {
             sessionManager.SetTelemetryCallback(sessionId, altitude =>
             {
-                hubContext.Clients.Group(sessionId.ToString())
+                _ = hubContext.Clients.Group(sessionId.ToString())
                     .SendAsync("AltitudeUpdate", altitude);
             });
         }

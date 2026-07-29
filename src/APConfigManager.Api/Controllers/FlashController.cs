@@ -50,7 +50,7 @@ public class FlashController : ControllerBase
 
             var progress = new Progress<(int percent, string message)>(p =>
             {
-                hubContext.Clients.Group(sessionId.ToString())
+                _ = hubContext.Clients.Group(sessionId.ToString())
                     .SendAsync("FlashProgress", p.percent, p.message);
             });
 
@@ -87,11 +87,12 @@ public class FlashController : ControllerBase
             return BadRequest(ex.Message);
         }
     }
+
     private void StartTelemetryForwarding(Guid sessionId)
     {
         sessionManager.SetTelemetryCallback(sessionId, altitude =>
         {
-            hubContext.Clients.Group(sessionId.ToString())
+            _ = hubContext.Clients.Group(sessionId.ToString())
                 .SendAsync("AltitudeUpdate", altitude);
         });
     }
