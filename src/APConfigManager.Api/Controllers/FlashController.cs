@@ -84,7 +84,7 @@ public class FlashController : ControllerBase
         }
         catch (DeviceConnectionException ex)
         {
-            return BadRequest(ex.Message);
+            return StatusCode(503, ex.Message);
         }
     }
 
