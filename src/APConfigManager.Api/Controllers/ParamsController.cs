@@ -43,7 +43,7 @@ namespace APConfigManager.Api.Controllers
 
                 var progress = new  Progress<(int current, int total)>(p =>
                 {
-                    hubContext.Clients.Group(sessionId.ToString())
+                    _ = hubContext.Clients.Group(sessionId.ToString())
                         .SendAsync("ParamProgress", p.current, p.total);
                 });
 

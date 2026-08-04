@@ -26,6 +26,7 @@ namespace APConfigManager.Api.Controllers
         {
             var ports = this.portScanner.GetAvailablePortsDetailed();
             var result = ports.Select(p => new PortInfo { Name = p.Name, Description = p.Description }).ToList();
+
             return Ok(result);
         }
     }

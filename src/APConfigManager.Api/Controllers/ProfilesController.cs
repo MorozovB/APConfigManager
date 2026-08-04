@@ -34,11 +34,11 @@ public class ProfilesController : ControllerBase
     public ActionResult Save([FromBody] DeviceProfile profile)
     {
         if (profile is null)
+        {
             return BadRequest("Profile is required");
+        }
 
         NormalizeProfilePaths(profile);
-
-        Console.WriteLine($"Save profile: Id={profile.Id}, Name={profile.Name}");
 
         repository.Save(profile);
         return Ok();
