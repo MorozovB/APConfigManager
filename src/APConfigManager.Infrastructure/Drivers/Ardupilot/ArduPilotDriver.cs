@@ -492,7 +492,7 @@ public class ArduPilotDriver : IAutopilotDriver
             await this.bootloader.ChipEraseAsync(ct);
 
             progress.Report((80, "Booting..."));
-            await bootloader.BootAsync(ct);
+            // await bootloader.BootAsync(ct);
             await ReconnectAfterBootAsync(ct);
             progress.Report((100, "Done"));
 
