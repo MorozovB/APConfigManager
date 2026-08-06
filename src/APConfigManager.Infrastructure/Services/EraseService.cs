@@ -23,12 +23,8 @@ namespace APConfigManager.Infrastructure.Services
         {
             ArgumentNullException.ThrowIfNull(progress);
 
-            var session = sessionManager.GetSession(sessionId);
-
-            if (session is null)
-            {
-                throw new SessionException($"Session {sessionId} not found.");
-            }
+            _ = sessionManager.GetSession(sessionId)
+                ?? throw new SessionException($"Session {sessionId} not found.");
 
             var driver = sessionManager.GetDriver(sessionId);
 

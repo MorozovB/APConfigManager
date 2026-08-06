@@ -124,7 +124,7 @@ namespace APConfigManager.Infrastructure.Parsers
             {
                 Magic = magic,
                 BoardId = boardId,
-                FlashSize = imageSize,
+                ImageSize = imageSize,
                 ImageBytes = imageBytes,
                 BoardRevision = boardRevision,
                 Version = version,

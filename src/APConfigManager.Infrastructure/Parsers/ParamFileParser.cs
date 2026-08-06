@@ -40,10 +40,7 @@ namespace APConfigManager.Infrastructure.Parsers
         /// </summary>
         public static List<Parameter> Parse(Stream stream)
         {
-            if (stream == null)
-            {
-                throw new ArgumentNullException(nameof(stream));
-            }
+            ArgumentNullException.ThrowIfNull(stream);
 
             var result = new List<Parameter>();
 

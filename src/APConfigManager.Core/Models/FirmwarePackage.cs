@@ -37,9 +37,9 @@ namespace APConfigManager.Core.Models
         public string Description { get; init; } = string.Empty;
 
         /// <summary>
-        /// Size of flash.
+        /// Size of image.
         /// </summary>
-        public int FlashSize { get; init; }
+        public int ImageSize { get; init; }
 
         /// <summary>
         /// Main firmware image

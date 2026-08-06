@@ -206,7 +206,6 @@ public class ArduPilotDriver : IAutopilotDriver
         }
 
         var portInfo = this.portScanner.GetPortDescription(port);
-        // this.currentMode = currentMode;
 
         var state = this.currentMode == BootMode.Bootloader
             ? DeviceState.InBootloader
