@@ -493,7 +493,9 @@ public class ArduPilotDriver : IAutopilotDriver
             progress.Report((80, "Booting..."));
             // await bootloader.BootAsync(ct);
             await ReconnectAfterBootAsync(ct);
-            progress.Report((100, "Done"));
+            progress.Report((100, "Erase complete."));
+
+            UpdateSessionPortAndState(session!.Port, DeviceState.InBootloader);
 
             if (onAltitudeUpdate != null)
             {
@@ -1230,19 +1232,22 @@ public class ArduPilotDriver : IAutopilotDriver
             return;
         }
 
-        session = new DeviceSession
-        {
-            Id = session.Id,
-            Port = port,
-            BaudRate = session.BaudRate,
-            State = state,
-            ConnectedAt = session.ConnectedAt,
-            DeviceSerial = session.DeviceSerial,
-            UsbLocation = session.UsbLocation,
-            FirmwareVersion = session.FirmwareVersion,
-            FirmwareDescription = session.FirmwareDescription,
-            BootloaderRevision = session.BootloaderRevision
-        };
+        session.Port = port;
+        session.State = state;
+
+        //session = new DeviceSession
+        //{
+        //    Id = session.Id,
+        //    session.Port = port,
+        //    BaudRate = session.BaudRate,
+        //    State = state,
+        //    ConnectedAt = session.ConnectedAt,
+        //    DeviceSerial = session.DeviceSerial,
+        //    UsbLocation = session.UsbLocation,
+        //    FirmwareVersion = session.FirmwareVersion,
+        //    FirmwareDescription = session.FirmwareDescription,
+        //    BootloaderRevision = session.BootloaderRevision
+        //};
     }
 
     /// <summary>

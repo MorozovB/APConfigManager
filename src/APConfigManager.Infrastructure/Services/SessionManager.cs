@@ -21,6 +21,8 @@ public class SessionManager : ISessionManager, IAsyncDisposable
     private readonly SemaphoreSlim _lock = new(1, 1);
     private readonly Func<IAutopilotDriver> driverFactory;
 
+    private bool _disposed = false;
+
     /// <summary>
     /// Initializes the session manager with a driver factory.
     /// The factory will be replaced with proper DI registration in Flasher.Api.
@@ -57,7 +59,16 @@ public class SessionManager : ISessionManager, IAsyncDisposable
             }
 
             var driver = this.driverFactory();
-            var session = await driver.ConnectAsync(port, baudRate, ct);
+            DeviceSession session;
+            try
+            {
+                session = await driver.ConnectAsync(port, baudRate, ct);
+            }
+            catch
+            {
+                try { await driver.DisconnectAsync(); } catch { }
+                throw;
+            }
 
             lock (_stateLock)
             {
@@ -114,13 +125,18 @@ public class SessionManager : ISessionManager, IAsyncDisposable
                 }
             }
 
-            await driver.DisconnectAsync();
-
-            lock (_stateLock)
+            try
             {
-                drivers.Remove(sessionId);
-                sessions.Remove(sessionId);
+                await driver.DisconnectAsync();
             }
+            finally
+            {
+                lock (_stateLock) {
+                    drivers.Remove(sessionId);
+                    sessions.Remove(sessionId);
+                }
+            }
+
         }
         finally
         {
@@ -172,18 +188,15 @@ public class SessionManager : ISessionManager, IAsyncDisposable
             {
                 return;
             }
+
+            var current = driver.GetCurrentSession();
+
+            if (current is not null)
+            {
+                sessions[sessionId] = current;
+            }
         }
 
-        var current = driver.GetCurrentSession();
-        if (current is null)
-        {
-            return;
-        }
-
-        lock (_stateLock)
-        {
-            sessions[sessionId] = current;
-        }
     }
 
     /// <summary>
@@ -205,6 +218,13 @@ public class SessionManager : ISessionManager, IAsyncDisposable
     /// </summary>
     public async ValueTask DisposeAsync()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+
         await _lock.WaitAsync();
 
         try
