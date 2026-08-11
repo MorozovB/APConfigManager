@@ -1,6 +1,7 @@
 using APConfigManager.Core.Interfaces.Drivers;
-using APConfigManager.Core.Models;
 using APConfigManager.Core.Interfaces.Transport;
+using APConfigManager.Core.Models;
+using Microsoft.Extensions.Logging;
 using static MAVLink;
 
 namespace APConfigManager.Infrastructure.Drivers.Ardupilot;
@@ -12,13 +13,15 @@ public class MavLinkProtocol : ITelemetryProtocol
 {
     private readonly ISerialPortAdapter port;
     private readonly MavlinkParse parser;
+    private readonly ILogger<MavLinkProtocol> logger;
 
     /// <summary>
     /// Initializes the MAVLink protocol with a serial port adapter.
     /// </summary>
-    public MavLinkProtocol(ISerialPortAdapter port)
+    public MavLinkProtocol(ISerialPortAdapter port, ILogger<MavLinkProtocol> logger)
     {
         this.port = port;
+        this.logger = logger;
         parser = new MavlinkParse();
     }
 
@@ -104,7 +107,7 @@ public class MavLinkProtocol : ITelemetryProtocol
             totalExpected = -1;
 
             await port.WriteAsync(packet, 0, packet.Length, ct);
-            Console.WriteLine($"RequestAllParams: attempt {attempt}, sent PARAM_REQUEST_LIST");
+            logger.LogDebug($"RequestAllParams: attempt {attempt}, sent PARAM_REQUEST_LIST");
 
             // Time-based deadline instead of consecutive-null counter.
             // Right after boot the autopilot sends many non-PARAM_VALUE packets
@@ -120,8 +123,7 @@ public class MavLinkProtocol : ITelemetryProtocol
                 // Idle too long with no new params — device stopped sending
                 if (DateTime.UtcNow > idleDeadline)
                 {
-                    Console.WriteLine($"RequestAllParams: idle timeout " +
-                        $"({parameters.Count}/{totalExpected})");
+                    logger.LogDebug($"RequestAllParams: idle timeout ({parameters.Count}/{totalExpected})");
                     break;
                 }
 
@@ -161,14 +163,12 @@ public class MavLinkProtocol : ITelemetryProtocol
 
                 if (parameters.Count >= totalExpected)
                 {
-                    Console.WriteLine($"RequestAllParams: complete " +
-                        $"({parameters.Count}/{totalExpected})");
+                    logger.LogDebug($"RequestAllParams: complete ({parameters.Count}/{totalExpected})");
                     break;
                 }
             }
 
-            Console.WriteLine($"RequestAllParams: attempt {attempt} " +
-                $"received {parameters.Count}/{totalExpected}");
+            logger.LogDebug($"RequestAllParams: attempt {attempt} received {parameters.Count}/{totalExpected}");
 
             if (parameters.Count > 0 && parameters.Count >= totalExpected)
             {
@@ -178,7 +178,7 @@ public class MavLinkProtocol : ITelemetryProtocol
             // Partial read — request only missing indices before next attempt.
             if (parameters.Count > 0 && totalExpected > 0)
             {
-                Console.WriteLine($"RequestAllParams: partial read, requesting missing...");
+                logger.LogDebug($"RequestAllParams: partial read, requesting missing...");
                 await RequestMissingParamsAsync(parameters, totalExpected, ct);
 
                 if (parameters.Count >= totalExpected)
@@ -190,7 +190,7 @@ public class MavLinkProtocol : ITelemetryProtocol
             await Task.Delay(2000, ct);
         }
 
-        Console.WriteLine($"RequestAllParams: final {parameters.Count}/{totalExpected}");
+        logger.LogInformation($"RequestAllParams: final {parameters.Count}/{totalExpected}");
 
         // Remove duplicates by name, keeping the last received value.
         return parameters
@@ -249,7 +249,7 @@ public class MavLinkProtocol : ITelemetryProtocol
         // Check that the confirmed value is close to the one we set
         if (Math.Abs(confirmed.param_value - parameter.Value) > 0.001f)
         {
-            Console.WriteLine($"  Note: {parameter.Name} sent={parameter.Value}, device stored={confirmed.param_value}");
+            logger.LogDebug($"Note: {parameter.Name} sent={parameter.Value}, device stored={confirmed.param_value}");
         }
 
         return true;
@@ -310,7 +310,8 @@ public class MavLinkProtocol : ITelemetryProtocol
         };
 
         var versionString = $"{major}.{minor}.{patch}{typeSuffix}";
-        Console.WriteLine($"Firmware version: {versionString} (raw: 0x{version.flight_sw_version:X8})");
+
+        logger.LogInformation($"Firmware version: {versionString} (raw: 0x{version.flight_sw_version:X8})");
 
         return versionString;
     }
@@ -406,7 +407,7 @@ public class MavLinkProtocol : ITelemetryProtocol
             ArduPilotConstants.MavSysId,
             ArduPilotConstants.MavCompId);
 
-        Console.WriteLine($"FlashBootloader: sending MAV_CMD_FLASH_BOOTLOADER ({ArduPilotConstants.MavCmdFlashBootloader}), param5={ArduPilotConstants.BootloaderMagicNumber}");
+        logger.LogDebug($"FlashBootloader: sending MAV_CMD_FLASH_BOOTLOADER ({ArduPilotConstants.MavCmdFlashBootloader}), param5={ArduPilotConstants.BootloaderMagicNumber}");
 
         await port.WriteAsync(packet, 0, packet.Length, ct);
 
@@ -415,25 +416,28 @@ public class MavLinkProtocol : ITelemetryProtocol
 
         if (ackMsg is null)
         {
-            Console.WriteLine("FlashBootloader: no ACK received (timeout 30s)");
+            logger.LogWarning("FlashBootloader: no ACK received (timeout 30s)");
+
             return false;
         }
 
         var ack = (mavlink_command_ack_t)ackMsg.data;
 
-        Console.WriteLine($"FlashBootloader: ACK received, command={ack.command}, result={ack.result}");
+        logger.LogDebug($"FlashBootloader: ACK received, command={ack.command}, result={ack.result}");
 
         // Check that ACK is for our command
         if (ack.command != ArduPilotConstants.MavCmdFlashBootloader)
         {
-            Console.WriteLine($"FlashBootloader: ACK for wrong command ({ack.command}), ignoring");
+            logger.LogDebug($"FlashBootloader: ACK for wrong command ({ack.command}), ignoring");
+
             return false;
         }
 
         // MAV_RESULT.ACCEPTED = 0
         if (ack.result == (byte)MAV_RESULT.ACCEPTED)
         {
-            Console.WriteLine("FlashBootloader: bootloader updated successfully");
+            logger.LogInformation("FlashBootloader: bootloader updated successfully");
+
             return true;
         }
 
@@ -446,7 +450,8 @@ public class MavLinkProtocol : ITelemetryProtocol
             _ => $"UNKNOWN ({ack.result})"
         };
 
-        Console.WriteLine($"FlashBootloader: rejected with result={resultName}");
+        logger.LogWarning($"FlashBootloader: rejected with result={resultName}");
+
         return false;
     }
 
@@ -479,7 +484,8 @@ public class MavLinkProtocol : ITelemetryProtocol
                     if (!string.IsNullOrWhiteSpace(text))
                     {
                         messages.Add(text);
-                        Console.WriteLine($"STATUSTEXT: {text}");
+
+                        logger.LogInformation($"STATUSTEXT: {text}");
                     }
                 }
             }
@@ -539,7 +545,8 @@ public class MavLinkProtocol : ITelemetryProtocol
                     consecutiveErrors++;
                     if (consecutiveErrors >= 10)
                     {
-                        Console.WriteLine("Telemetry: device lost (10 consecutive read failures)");
+                        logger.LogWarning("Telemetry: device lost (10 consecutive read failures)");
+
                         onDisconnected?.Invoke();
                         break;
                     }
@@ -566,8 +573,10 @@ public class MavLinkProtocol : ITelemetryProtocol
             }
             catch (IOException)
             {
-                Console.WriteLine("Telemetry: IOException — device disconnected");
+                logger.LogWarning("Telemetry: IOException — device disconnected");
+
                 onDisconnected?.Invoke();
+
                 break;
             }
             catch
@@ -575,8 +584,10 @@ public class MavLinkProtocol : ITelemetryProtocol
                 consecutiveErrors++;
                 if (consecutiveErrors >= 10)
                 {
-                    Console.WriteLine("Telemetry: device lost");
+                    logger.LogWarning("Telemetry: device lost");
+
                     onDisconnected?.Invoke();
+
                     break;
                 }
             }

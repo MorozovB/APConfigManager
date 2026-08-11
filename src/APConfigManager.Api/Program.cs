@@ -9,6 +9,7 @@ using APConfigManager.Infrastructure.Parsers;
 using APConfigManager.Infrastructure.Services;
 using APConfigManager.Infrastructure.Transport;
 using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Logging;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -59,15 +60,16 @@ builder.Services.AddSingleton<IFirmwareValidator, FirmwareValidator>();
 builder.Services.AddSingleton<ISessionManager>(sp =>
 {
     var portScanner = sp.GetRequiredService<IPortScanner>();
+    var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
     SessionManager? manager = null;
 
     manager = new SessionManager(() =>
     {
         var port = new SerialPortAdapter();
         var bootloader = new StmBootloaderProtocol(port);
-        var telemetry = new MavLinkProtocol(port);
-        return new ArduPilotDriver(
-            port, bootloader, telemetry, portScanner,
+        var telemetry = new MavLinkProtocol(port, loggerFactory.CreateLogger<MavLinkProtocol>());
+        return new ArduPilotDriver(port, bootloader, telemetry, portScanner,
+            loggerFactory.CreateLogger<ArduPilotDriver>(),
             excludeId => manager!.GetOccupiedPorts(excludeId));
     });
 

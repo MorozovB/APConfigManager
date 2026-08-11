@@ -4,6 +4,7 @@ using APConfigManager.Core.Interfaces.Drivers;
 using APConfigManager.Core.Interfaces.Transport;
 using APConfigManager.Core.Models;
 using APConfigManager.Core.Results;
+using Microsoft.Extensions.Logging;
 
 namespace APConfigManager.Infrastructure.Drivers.Ardupilot;
 
@@ -24,6 +25,7 @@ public class ArduPilotDriver : IAutopilotDriver
     private readonly IBootloaderProtocol bootloader;
     private readonly ITelemetryProtocol telemetry;
     private readonly IPortScanner portScanner;
+    private readonly ILogger<ArduPilotDriver> logger;
 
     private DeviceSession? session;
     private BootMode currentMode = BootMode.Normal;
@@ -130,12 +132,14 @@ public class ArduPilotDriver : IAutopilotDriver
         IBootloaderProtocol bootloaderProtocol,
         ITelemetryProtocol telemetryProtocol,
         IPortScanner portScanner,
+        ILogger<ArduPilotDriver> logger,
         Func<Guid?, List<string>>? getOccupiedPorts = null)
     {
         this.port = port;
         this.bootloader = bootloaderProtocol;
         this.telemetry = telemetryProtocol;
         this.portScanner = portScanner;
+        this.logger = logger;
         this.getOccupiedPorts = getOccupiedPorts;
     }
 
@@ -548,7 +552,8 @@ public class ArduPilotDriver : IAutopilotDriver
 
         try
         {
-            Console.WriteLine("Resetting parameters to defaults before upload...");
+            logger.LogInformation("Resetting parameters to defaults before upload...");
+
             await telemetry.ResetParamsAsync(ct);
             await Task.Delay(1000, ct);
             await telemetry.RebootNormalAsync(ct);
@@ -567,7 +572,7 @@ public class ArduPilotDriver : IAutopilotDriver
                 .GroupBy(p => p.Name)
                 .ToDictionary(g => g.Key, g => g.Last().ParamType);
 
-            Console.WriteLine($"Device has {deviceMap.Count} parameters");
+            logger.LogDebug($"Device has {deviceMap.Count} parameters");
 
             var toUpload = new List<Parameter>();
             var missing = new List<Parameter>();
@@ -643,12 +648,13 @@ public class ArduPilotDriver : IAutopilotDriver
                 // No progress since last pass — stop wasting time
                 if (pending.Count == previousPendingCount)
                 {
-                    Console.WriteLine($"No progress after pass {pass - 1}, stopping");
+                    logger.LogWarning($"No progress after pass {pass - 1}, stopping");
+
                     break;
                 }
                 previousPendingCount = pending.Count;
 
-                Console.WriteLine($"Pass {pass}: {pending.Count} parameters");
+                logger.LogDebug($"Pass {pass}: {pending.Count} parameters");
 
                 var failed = new List<Parameter>();
 
@@ -682,7 +688,7 @@ public class ArduPilotDriver : IAutopilotDriver
                 // Reboot to apply params (some depend on others)
                 if (pass < WriteParamsPasses && (pending.Count > 0 || (pass == 1 && missing.Count > 0)))
                 {
-                    Console.WriteLine($"Rebooting to apply parameters...");
+                    logger.LogDebug($"Rebooting to apply parameters...");
 
                     await this.telemetry.RebootNormalAsync(ct);
                     port.Close();
@@ -747,11 +753,8 @@ public class ArduPilotDriver : IAutopilotDriver
                         pending.AddRange(nowExists);
                     }
 
-                    // Console.WriteLine($"After reboot: {pending.Count} pending, {missing.Count} missing");
                 }
             }
-
-            //Console.WriteLine($"Done: sent={sent}, same={skippedSame}, missing={missing.Count}, failed={pending.Count}");
 
             // Force-write params that get overwritten by device after reboots
             var forceList = parameters
@@ -761,7 +764,7 @@ public class ArduPilotDriver : IAutopilotDriver
 
             if (forceList.Count > 0)
             {
-                Console.WriteLine($"Force-writing {forceList.Count} mandatory parameters...");
+                logger.LogInformation($"Force-writing {forceList.Count} mandatory parameters...");
 
                 foreach (var param in forceList)
                 {
@@ -788,7 +791,7 @@ public class ArduPilotDriver : IAutopilotDriver
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Final reboot failed: {ex.Message}");
+                logger.LogWarning(ex, "Final reboot failed");
             }
 
             // Write deferred params last (ARMING_REQUIRE etc.)
@@ -990,13 +993,13 @@ public class ArduPilotDriver : IAutopilotDriver
         await EnsureModeAsync(BootMode.Normal, ct);
         await this.telemetry.ResetParamsAsync(ct);
 
-        Console.WriteLine("Parameters reset. Rebooting to apply...");
+        logger.LogInformation("Parameters reset. Rebooting to apply...");
 
         await RebootAsync(BootMode.Bootloader, ct);
         await bootloader.BootAsync(ct);
         await ReconnectAfterBootAsync(ct);
 
-        Console.WriteLine($"Rebooted. Parameters applied.");
+        logger.LogInformation("Rebooted. Parameters applied.");
     }
 
     /// <summary>
@@ -1036,7 +1039,7 @@ public class ArduPilotDriver : IAutopilotDriver
                 };
             }
 
-            Console.WriteLine("Bootloader updated. Rebooting to apply...");
+            logger.LogInformation("Bootloader updated. Rebooting to apply...");
 
             // Wait for the device to finish writing before reboot
             await Task.Delay(2000, ct);
@@ -1045,7 +1048,7 @@ public class ArduPilotDriver : IAutopilotDriver
             port.Close();
             await ReconnectAfterBootAsync(ct);
 
-            Console.WriteLine("Bootloader update complete. Reconnected.");
+            logger.LogInformation("Bootloader update complete. Reconnected.");
 
             if (onAltitudeUpdate != null)
             {
@@ -1063,12 +1066,12 @@ public class ArduPilotDriver : IAutopilotDriver
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Bootloader update error: {ex.Message}");
+            logger.LogError(ex, "Bootloader update failed");
 
             return new BootloaderUpdateResult
             {
                 Success = false,
-                ErrorMessage = $"Bootloader update error: {ex.Message}"
+                ErrorMessage = "Bootloader update failed"
             };
         }
     }
@@ -1132,7 +1135,7 @@ public class ArduPilotDriver : IAutopilotDriver
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Telemetry loop error: {ex.Message}");
+                logger.LogWarning(ex, "Telemetry loop error");
             }
         });
     }
