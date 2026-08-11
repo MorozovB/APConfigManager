@@ -21,7 +21,7 @@ namespace APConfigManager.Infrastructure.Services
                 "APConfigManager",
                 "profile-files");
 
-            Directory.CreateDirectory(profileFilesRoot);
+            _ = Directory.CreateDirectory(profileFilesRoot);
         }
 
         public (Stream Stream, string FileName) OpenFirmware(Guid profileId)
@@ -111,7 +111,7 @@ namespace APConfigManager.Infrastructure.Services
         private DeviceProfile GetProfileOrThrow(Guid profileId)
         {
             return repository.GetById(profileId)
-                ?? throw new FileNotFoundException($"Profile '{profileId}' was not found.");
+                ?? throw new KeyNotFoundException($"Profile '{profileId}' was not found.");
         }
 
         private (Stream Stream, string FileName) OpenFile(
@@ -128,9 +128,7 @@ namespace APConfigManager.Infrastructure.Services
 
             if (resolved is null)
             {
-                var tried = string.Join("; ", GetCandidatePaths(profileFilesRoot, profileId, filePath));
-                throw new FileNotFoundException(
-                    $"{label} not found for '{filePath}'. Checked: {tried}.");
+                throw new FileNotFoundException($"{label} not found for this profile.");
             }
 
             var stream = new FileStream(
@@ -144,7 +142,18 @@ namespace APConfigManager.Infrastructure.Services
 
         private string? TryResolveExistingPath(Guid profileId, string storedPath)
         {
-            foreach (var candidate in GetCandidatePaths(profileFilesRoot, profileId, storedPath))
+            List<string> candidates;
+
+            try
+            {
+                candidates = GetCandidatePaths(profileFilesRoot, profileId, storedPath).ToList();
+            }
+            catch (Exception ex) when (ex is ArgumentException or PathTooLongException or NotSupportedException)
+            {
+                return null;
+            }
+
+            foreach (var candidate in candidates)
             {
                 if (File.Exists(candidate))
                 {
@@ -171,21 +180,27 @@ namespace APConfigManager.Infrastructure.Services
             }
 
             var profileDir = Path.Combine(profileFilesRoot, profileId.ToString());
-            Directory.CreateDirectory(profileDir);
+            _ = Directory.CreateDirectory(profileDir);
 
             var fullPath = Path.Combine(profileDir, safeName);
+            var tempPath = fullPath + ".tmp";
 
-            await using var fileStream = new FileStream(
-                fullPath,
-                FileMode.Create,
-                FileAccess.Write,
-                FileShare.None);
-
-            await content.CopyToAsync(fileStream, ct);
+            try
+            {
+                await using (var fileStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                {
+                    await content.CopyToAsync(fileStream, ct);
+                }
+                File.Move(tempPath, fullPath, overwrite: true);
+            }
+            catch
+            {
+                try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { }
+                throw;
+            }
 
             return Path.GetFullPath(fullPath);
         }
     }
-
 }
 
