@@ -150,6 +150,8 @@ public class ArduPilotDriver : IAutopilotDriver
     /// </summary>
     public async Task<DeviceSession> ConnectAsync(string port, int baudRate, CancellationToken ct)
     {
+        logger.LogInformation("Connecting to {Port} at {Baud}", port, baudRate);
+
         this.port.Open(port, baudRate);
 
         var fwVersion = string.Empty;
@@ -166,8 +168,9 @@ public class ArduPilotDriver : IAutopilotDriver
             {
                 fwVersion = await telemetry.GetFirmwareVersionAsync(ct);
             }
-            catch
+            catch (Exception ex)
             {
+                logger.LogDebug(ex, "Could not read firmware version on connect");
             }
 
             try
@@ -189,10 +192,15 @@ public class ArduPilotDriver : IAutopilotDriver
                     }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                logger.LogDebug(ex, "Could not read boot messages on connect");
+            }
         }
         catch
         {
+            logger.LogWarning("Device did not respond in normal mode on connect; falling back to bootloader");
+
             this.port.Purge();
             var syncOk = await this.bootloader.SyncAsync(ct);
             if (syncOk)
@@ -228,6 +236,8 @@ public class ArduPilotDriver : IAutopilotDriver
             FirmwareDescription = fwDescription,
             BootloaderRevision = blRevision
         };
+
+        logger.LogInformation("Connected on {Port}, mode {Mode}, fw '{Version}'", port, currentMode, fwVersion);
 
         return session;
     }
@@ -572,7 +582,7 @@ public class ArduPilotDriver : IAutopilotDriver
                 .GroupBy(p => p.Name)
                 .ToDictionary(g => g.Key, g => g.Last().ParamType);
 
-            logger.LogDebug($"Device has {deviceMap.Count} parameters");
+            logger.LogDebug("Device has {Count} parameters", deviceMap.Count);
 
             var toUpload = new List<Parameter>();
             var missing = new List<Parameter>();
@@ -648,13 +658,13 @@ public class ArduPilotDriver : IAutopilotDriver
                 // No progress since last pass — stop wasting time
                 if (pending.Count == previousPendingCount)
                 {
-                    logger.LogWarning($"No progress after pass {pass - 1}, stopping");
+                    logger.LogWarning("No progress after pass {Pass}, stopping", pass - 1);
 
                     break;
                 }
                 previousPendingCount = pending.Count;
 
-                logger.LogDebug($"Pass {pass}: {pending.Count} parameters");
+                logger.LogDebug("Pass {Pass}: {Count} parameters", pass, pending.Count);
 
                 var failed = new List<Parameter>();
 
@@ -688,7 +698,7 @@ public class ArduPilotDriver : IAutopilotDriver
                 // Reboot to apply params (some depend on others)
                 if (pass < WriteParamsPasses && (pending.Count > 0 || (pass == 1 && missing.Count > 0)))
                 {
-                    logger.LogDebug($"Rebooting to apply parameters...");
+                    logger.LogDebug("Rebooting to apply parameters...");
 
                     await this.telemetry.RebootNormalAsync(ct);
                     port.Close();
@@ -764,7 +774,7 @@ public class ArduPilotDriver : IAutopilotDriver
 
             if (forceList.Count > 0)
             {
-                logger.LogInformation($"Force-writing {forceList.Count} mandatory parameters...");
+                logger.LogInformation("Force-writing {Count} mandatory parameters...", forceList.Count);
 
                 foreach (var param in forceList)
                 {
