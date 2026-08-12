@@ -68,6 +68,9 @@ public sealed class SerialPortAdapter : ISerialPortAdapter
                 };
 
                 _serialPort.Open();
+
+                logger.LogDebug("Port {Port} opened at {Baud}", port, baudRate);
+
                 return;
             }
             catch (Exception ex)

@@ -417,7 +417,7 @@ public class ArduPilotDriver : IAutopilotDriver
             var expectedCrc = CalculateFirmwareCrc(firmware.ImageBytes, deviceInfo.FlashSize);
 
             progress.Report((0, "Erasing..."));
-            await this.bootloader.SyncAsync(ct);
+            _ = await this.bootloader.SyncAsync(ct);
             await this.bootloader.ChipEraseAsync(ct);
 
             var bytesWritten = 0;
@@ -460,6 +460,8 @@ public class ArduPilotDriver : IAutopilotDriver
                     ErrorMessage = $"CRC mismatch: expected 0x{expectedCrc:X8}, device 0x{deviceCrc:X8}"
                 };
             }
+
+            logger.LogInformation("Flash OK: {Bytes} bytes written", bytesWritten);
 
             progress.Report((95, "Booting..."));
             await bootloader.BootAsync(ct);
@@ -508,10 +510,10 @@ public class ArduPilotDriver : IAutopilotDriver
             await EnsureModeAsync(BootMode.Bootloader, ct);
 
             progress.Report((0, "Reading device info..."));
-            await this.bootloader.GetDeviceInfoAsync(ct);
+            _ = await this.bootloader.GetDeviceInfoAsync(ct);
 
             progress.Report((10, "Erasing..."));
-            await this.bootloader.SyncAsync(ct);
+            _ = await this.bootloader.SyncAsync(ct);
             await this.bootloader.ChipEraseAsync(ct);
 
             progress.Report((80, "Booting..."));
@@ -1104,6 +1106,8 @@ public class ArduPilotDriver : IAutopilotDriver
     /// <returns></returns>
     public async Task DisconnectAsync()
     {
+        logger.LogInformation("Disconnecting device");
+
         await StopTelemetryAsync();
 
         if (this.port.IsOpen)

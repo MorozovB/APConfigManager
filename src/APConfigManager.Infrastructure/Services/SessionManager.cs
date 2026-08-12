@@ -49,6 +49,8 @@ public class SessionManager : ISessionManager, IAsyncDisposable
             {
                 if (sessions.Count >= MaxSessions)
                 {
+                    logger.LogWarning("Session limit reached ({Max})", MaxSessions);
+
                     throw new SessionException($"Maximum of {MaxSessions} concurrent sessions reached.");
                 }
 
@@ -57,6 +59,8 @@ public class SessionManager : ISessionManager, IAsyncDisposable
 
                 if (portInUse)
                 {
+                    logger.LogWarning("Port {Port} already in use", port);
+
                     throw new SessionException($"Port {port} is already in use by another session.");
                 }
             }
@@ -67,9 +71,16 @@ public class SessionManager : ISessionManager, IAsyncDisposable
             {
                 session = await driver.ConnectAsync(port, baudRate, ct);
             }
-            catch
+            catch (Exception ex)
             {
-                try { await driver.DisconnectAsync(); } catch { }
+                logger.LogWarning(ex, "Connect failed on {Port}, releasing driver", port);
+
+                try {
+                    await driver.DisconnectAsync();
+                }
+                catch
+                {
+                }
                 throw;
             }
 
@@ -78,6 +89,8 @@ public class SessionManager : ISessionManager, IAsyncDisposable
                 sessions[session.Id] = session;
                 drivers[session.Id] = driver;
             }
+
+            logger.LogInformation("Session {Id} opened on {Port}", session.Id, port);
 
             return session;
         }
@@ -124,6 +137,8 @@ public class SessionManager : ISessionManager, IAsyncDisposable
             {
                 if (!drivers.TryGetValue(sessionId, out driver))
                 {
+                    logger.LogWarning("Session {Id} not found", sessionId);
+
                     throw new SessionException($"Session {sessionId} not found.");
                 }
             }
@@ -135,15 +150,17 @@ public class SessionManager : ISessionManager, IAsyncDisposable
             finally
             {
                 lock (_stateLock) {
-                    drivers.Remove(sessionId);
-                    sessions.Remove(sessionId);
+                    _ = drivers.Remove(sessionId);
+                    _ = sessions.Remove(sessionId);
                 }
             }
+
+            logger.LogInformation("Session {Id} closed", sessionId);
 
         }
         finally
         {
-            _lock.Release();
+            _ = _lock.Release();
         }
     }
 
@@ -157,6 +174,8 @@ public class SessionManager : ISessionManager, IAsyncDisposable
         {
             if (!drivers.TryGetValue(sessionId, out var driver))
             {
+                logger.LogWarning("Session {Id} not found", sessionId);
+
                 throw new SessionException($"Session {sessionId} not found.");
             }
 
@@ -238,9 +257,9 @@ public class SessionManager : ISessionManager, IAsyncDisposable
                 {
                     await driver.DisconnectAsync();
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Suppress errors during cleanup
+                    logger.LogDebug(ex, "Error disconnecting driver during dispose");
                 }
             }
 
@@ -249,7 +268,7 @@ public class SessionManager : ISessionManager, IAsyncDisposable
         }
         finally
         {
-            _lock.Release();
+            _ = _lock.Release();
             _lock.Dispose();
         }
     }

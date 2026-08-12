@@ -1,6 +1,7 @@
 using System.IO.Ports;
 using System.Management;
 using System.Text.RegularExpressions;
+using System.Threading;
 using APConfigManager.Core.Interfaces.Transport;
 using APConfigManager.Core.Models;
 using Microsoft.Extensions.Logging;
@@ -190,6 +191,7 @@ namespace APConfigManager.Infrastructure.Transport
             catch (OperationCanceledException)
             {
                 logger.LogWarning("Bootloader port did not appear within {Timeout}s (original {Port})", timeout.TotalSeconds, originalPort);
+
                 return null;
             }
         }
@@ -258,6 +260,8 @@ namespace APConfigManager.Infrastructure.Transport
             }
             catch (OperationCanceledException)
             {
+                logger.LogWarning("MAVLink port did not appear within {Timeout}s", timeOut.TotalSeconds);
+
                 return null;
             }
         }

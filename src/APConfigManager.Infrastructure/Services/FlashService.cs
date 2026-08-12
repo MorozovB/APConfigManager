@@ -45,6 +45,8 @@ public class FlashService : IFlashService
         ArgumentNullException.ThrowIfNull(firmwareFile);
         ArgumentNullException.ThrowIfNull(progress);
 
+        logger.LogInformation("Flash requested for session {Id}", sessionId);
+
         var session = sessionManager.GetSession(sessionId)
             ?? throw new SessionException($"Session {sessionId} not found.");
 
@@ -104,6 +106,11 @@ public class FlashService : IFlashService
         {
             UpdateSessionFirmwareMetadata(driver, firmware, result);
             sessionManager.SyncSessionFromDriver(sessionId);
+        }
+
+        if (!result.Success)
+        {
+            logger.LogWarning("Flash failed for session {Id}: {Error}", sessionId, result.ErrorMessage);
         }
 
         return result;

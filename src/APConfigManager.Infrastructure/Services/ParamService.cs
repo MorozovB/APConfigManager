@@ -40,6 +40,8 @@ namespace APConfigManager.Infrastructure.Services
             ArgumentNullException.ThrowIfNull(stream);
             ArgumentNullException.ThrowIfNull(progress);
 
+            logger.LogInformation("Param upload requested for session {Id}", sessionId);
+
             _ = sessionManager.GetSession(sessionId)
                 ?? throw new SessionException($"Session {sessionId} not found.");
 
@@ -64,6 +66,8 @@ namespace APConfigManager.Infrastructure.Services
             Guid sessionId,
             CancellationToken ct)
         {
+            logger.LogInformation("Param download requested for session {Id}", sessionId);
+
             _ = sessionManager.GetSession(sessionId)
                 ?? throw new SessionException($"Session {sessionId} not found.");
 
