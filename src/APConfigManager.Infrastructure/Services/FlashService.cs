@@ -5,6 +5,8 @@ using APConfigManager.Core.Interfaces.Parsers;
 using APConfigManager.Core.Interfaces.Services;
 using APConfigManager.Core.Models;
 using APConfigManager.Core.Results;
+using APConfigManager.Infrastructure.Drivers.Ardupilot;
+using Microsoft.Extensions.Logging;
 
 namespace APConfigManager.Infrastructure.Services;
 
@@ -17,6 +19,7 @@ public class FlashService : IFlashService
     private readonly ISessionManager sessionManager;
     private readonly IFirmwareParser firmwareParser;
     private readonly IFirmwareValidator firmwareValidator;
+    private readonly ILogger<FlashService> logger;
 
     /// <summary>
     /// Initializes the flash service with required dependencies.
@@ -24,11 +27,13 @@ public class FlashService : IFlashService
     public FlashService(
         ISessionManager sessionManager,
         IFirmwareParser firmwareParser,
-        IFirmwareValidator firmwareValidator)
+        IFirmwareValidator firmwareValidator,
+        ILogger<FlashService> logger)
     {
         this.sessionManager = sessionManager;
         this.firmwareParser = firmwareParser;
         this.firmwareValidator = firmwareValidator;
+        this.logger = logger;
     }
 
     public async Task<FlashResult> FlashAsync(

@@ -3,6 +3,8 @@ using APConfigManager.Core.Interfaces.Parsers;
 using APConfigManager.Core.Interfaces.Services;
 using APConfigManager.Core.Models;
 using APConfigManager.Core.Results;
+using APConfigManager.Infrastructure.Drivers.Ardupilot;
+using Microsoft.Extensions.Logging;
 
 namespace APConfigManager.Infrastructure.Services
 {
@@ -13,14 +15,16 @@ namespace APConfigManager.Infrastructure.Services
     {
         private readonly ISessionManager sessionManager;
         private readonly IParamFileParser paramParser;
+        private readonly ILogger<ParamService> logger;
 
         /// <summary>
         /// Initializes the parameter service.
         /// </summary>
-        public ParamService(ISessionManager sessionManager, IParamFileParser paramParser)
+        public ParamService(ISessionManager sessionManager, IParamFileParser paramParser, ILogger<ParamService> logger)
         {
             this.sessionManager = sessionManager;
             this.paramParser = paramParser;
+            this.logger = logger;
         }
 
         /// <summary>

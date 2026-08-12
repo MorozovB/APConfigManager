@@ -63,10 +63,12 @@ builder.Services.AddSingleton<ISessionManager>(sp =>
     var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
     SessionManager? manager = null;
 
-    manager = new SessionManager(() =>
+    manager = new SessionManager(
+        loggerFactory.CreateLogger<SessionManager>(),
+        () =>
     {
-        var port = new SerialPortAdapter();
-        var bootloader = new StmBootloaderProtocol(port);
+        var port = new SerialPortAdapter(loggerFactory.CreateLogger<SerialPortAdapter>());
+        var bootloader = new StmBootloaderProtocol(port, loggerFactory.CreateLogger<StmBootloaderProtocol>());
         var telemetry = new MavLinkProtocol(port, loggerFactory.CreateLogger<MavLinkProtocol>());
         return new ArduPilotDriver(port, bootloader, telemetry, portScanner,
             loggerFactory.CreateLogger<ArduPilotDriver>(),
@@ -88,8 +90,8 @@ var app = builder.Build();
 // ─── Middleware ──────────────────────────────────
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    _ = app.UseSwagger();
+    _ = app.UseSwaggerUI();
 }
 
 app.UseCors("AllowLocalhost");
@@ -98,11 +100,11 @@ app.UseRouting();
 var uiPath = FindUiPath(app.Environment);
 if (uiPath is not null)
 {
-    app.UseDefaultFiles(new DefaultFilesOptions
+    _ = app.UseDefaultFiles(new DefaultFilesOptions
     {
         FileProvider = new PhysicalFileProvider(uiPath)
     });
-    app.UseStaticFiles(new StaticFileOptions
+    _ = app.UseStaticFiles(new StaticFileOptions
     {
         FileProvider = new PhysicalFileProvider(uiPath)
     });
@@ -110,7 +112,7 @@ if (uiPath is not null)
 
 if (uiPath is not null)
 {
-    app.MapFallback(async context =>
+    _ = app.MapFallback(async context =>
     {
         var requestPath = context.Request.Path.Value ?? string.Empty;
         if (!HttpMethods.IsGet(context.Request.Method) ||

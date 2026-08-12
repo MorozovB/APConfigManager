@@ -312,7 +312,10 @@ public class ArduPilotDriver : IAutopilotDriver
             await telemetry.SendHeartbeatAsync(ct);
             await WaitForDeviceHeartbeatAsync(ct);
         }
-        catch { }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "No heartbeat after reboot — device may not be running firmware");
+        }
 
         try
         {
@@ -323,7 +326,10 @@ public class ArduPilotDriver : IAutopilotDriver
                 session.FirmwareVersion = fwVer;
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Could not read firmware version after reboot");
+        }
 
         var newPortInfo = portScanner.GetPortDescription(targetPort);
         currentMode = BootMode.Normal;
@@ -444,6 +450,8 @@ public class ArduPilotDriver : IAutopilotDriver
 
             if (deviceCrc != expectedCrc)
             {
+                logger.LogError("Flash CRC mismatch: expected 0x{Expected:X8}, device 0x{Device:X8}", expectedCrc, deviceCrc);
+
                 return new FlashResult
                 {
                     Success = false,
@@ -472,6 +480,8 @@ public class ArduPilotDriver : IAutopilotDriver
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            logger.LogError(ex, "Flash failed");
+
             return new FlashResult
             {
                 Success = false,
@@ -520,6 +530,8 @@ public class ArduPilotDriver : IAutopilotDriver
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            logger.LogError(ex, "Erase failed");
+
             return new EraseResult
             {
                 Success = false,
@@ -1225,6 +1237,8 @@ public class ArduPilotDriver : IAutopilotDriver
             }
             return;
         }
+
+        logger.LogDebug("Switching mode {From} → {To}", currentMode, mode);
 
         var rebootResult = await RebootAsync(mode, ct);
 

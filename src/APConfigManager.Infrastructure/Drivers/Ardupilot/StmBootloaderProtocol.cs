@@ -2,6 +2,7 @@ using APConfigManager.Core.Exceptions;
 using APConfigManager.Core.Interfaces.Drivers;
 using APConfigManager.Core.Interfaces.Transport;
 using APConfigManager.Core.Models;
+using Microsoft.Extensions.Logging;
 
 namespace APConfigManager.Infrastructure.Drivers.Ardupilot
 {
@@ -12,11 +13,13 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
     public class StmBootloaderProtocol : IBootloaderProtocol
     {
         private readonly ISerialPortAdapter port;
+        private readonly ILogger<StmBootloaderProtocol> logger;
 
 
-        public StmBootloaderProtocol(ISerialPortAdapter port)
+        public StmBootloaderProtocol(ISerialPortAdapter port, ILogger<StmBootloaderProtocol> logger)
         {
             this.port = port;
+            this.logger = logger;
         }
 
         /// <summary>
@@ -71,12 +74,14 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
                 }
                 catch (TimeoutException)
                 {
-                    // Ignore timeout and retry
+                    logger.LogDebug("Bootloader sync timeout, attempt {Attempt}/3", attempt);
                 }
 
                 port.Purge();
                 await Task.Delay(100, ct);
             }
+
+            logger.LogWarning("Bootloader sync failed after 3 attempts");
 
             return false;
         }
@@ -112,6 +117,8 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
         /// </summary>
         public async Task ChipEraseAsync(CancellationToken ct)
         {
+            logger.LogDebug("Chip erase started");
+
             var command = new byte[] { ArduPilotConstants.CHIP_ERASE, ArduPilotConstants.EOC };
 
             await port.WriteAsync(command, 0, command.Length, ct);

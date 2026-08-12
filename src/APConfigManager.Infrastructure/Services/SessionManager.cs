@@ -1,8 +1,9 @@
-using APConfigManager.Core.Enums;
 using APConfigManager.Core.Exceptions;
 using APConfigManager.Core.Interfaces.Drivers;
 using APConfigManager.Core.Interfaces.Services;
 using APConfigManager.Core.Models;
+using Microsoft.Extensions.Logging;
+
 
 namespace APConfigManager.Infrastructure.Services;
 
@@ -20,6 +21,7 @@ public class SessionManager : ISessionManager, IAsyncDisposable
     private readonly object _stateLock = new();
     private readonly SemaphoreSlim _lock = new(1, 1);
     private readonly Func<IAutopilotDriver> driverFactory;
+    private readonly ILogger<SessionManager> logger;
 
     private bool _disposed = false;
 
@@ -27,9 +29,10 @@ public class SessionManager : ISessionManager, IAsyncDisposable
     /// Initializes the session manager with a driver factory.
     /// The factory will be replaced with proper DI registration in Flasher.Api.
     /// </summary>  
-    public SessionManager(Func<IAutopilotDriver> driverFactory)
+    public SessionManager(ILogger<SessionManager> logger, Func<IAutopilotDriver> driverFactory)
     {
         this.driverFactory = driverFactory;
+        this.logger = logger;
     }
 
     /// <summary>
@@ -80,7 +83,7 @@ public class SessionManager : ISessionManager, IAsyncDisposable
         }
         finally
         {
-            _lock.Release();
+            _ = _lock.Release();
         }
     }
 

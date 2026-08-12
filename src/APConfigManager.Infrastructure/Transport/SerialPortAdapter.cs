@@ -1,6 +1,8 @@
 using System.IO.Ports;
 using APConfigManager.Core.Exceptions;
 using APConfigManager.Core.Interfaces.Transport;
+using APConfigManager.Infrastructure.Drivers.Ardupilot;
+using Microsoft.Extensions.Logging;
 
 namespace APConfigManager.Infrastructure.Transport;
 
@@ -15,6 +17,13 @@ public sealed class SerialPortAdapter : ISerialPortAdapter
     private const int RetryDelayMs = 500;
     private const int DefaultReadTimeout = 3000;
     private const int DefaultWriteTimeout = 3000;
+
+    private readonly ILogger<SerialPortAdapter> logger;
+
+    public SerialPortAdapter(ILogger<SerialPortAdapter> logger)
+    {
+        this.logger = logger;
+    }
 
     /// <summary>
     /// Indicates whether the serial port is currently open.
@@ -64,6 +73,8 @@ public sealed class SerialPortAdapter : ISerialPortAdapter
             catch (Exception ex)
             {
                 lastException = ex;
+                logger.LogWarning(ex, "Failed to open {Port}, attempt {Attempt}/{Max}", port, attempt, MaxRetries);
+                 
                 _serialPort?.Dispose();
                 _serialPort = null;
 

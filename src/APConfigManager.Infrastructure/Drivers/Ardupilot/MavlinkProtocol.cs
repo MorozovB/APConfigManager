@@ -107,7 +107,7 @@ public class MavLinkProtocol : ITelemetryProtocol
             totalExpected = -1;
 
             await port.WriteAsync(packet, 0, packet.Length, ct);
-            logger.LogDebug($"RequestAllParams: attempt {attempt}, sent PARAM_REQUEST_LIST");
+            logger.LogDebug("RequestAllParams: attempt {Attempt}, sent PARAM_REQUEST_LIST", attempt);
 
             // Time-based deadline instead of consecutive-null counter.
             // Right after boot the autopilot sends many non-PARAM_VALUE packets
@@ -123,7 +123,7 @@ public class MavLinkProtocol : ITelemetryProtocol
                 // Idle too long with no new params — device stopped sending
                 if (DateTime.UtcNow > idleDeadline)
                 {
-                    logger.LogDebug($"RequestAllParams: idle timeout ({parameters.Count}/{totalExpected})");
+                    logger.LogDebug("RequestAllParams: idle timeout ({Got}/{Expected})", parameters.Count, totalExpected);
                     break;
                 }
 
@@ -163,12 +163,12 @@ public class MavLinkProtocol : ITelemetryProtocol
 
                 if (parameters.Count >= totalExpected)
                 {
-                    logger.LogDebug($"RequestAllParams: complete ({parameters.Count}/{totalExpected})");
+                    logger.LogDebug("RequestAllParams: complete ({Got}/{Expected})", parameters.Count, totalExpected);
                     break;
                 }
             }
 
-            logger.LogDebug($"RequestAllParams: attempt {attempt} received {parameters.Count}/{totalExpected}");
+            logger.LogDebug("RequestAllParams: attempt {Attempt} received {Got}/{Expected}", attempt, parameters.Count, totalExpected);
 
             if (parameters.Count > 0 && parameters.Count >= totalExpected)
             {
@@ -190,7 +190,12 @@ public class MavLinkProtocol : ITelemetryProtocol
             await Task.Delay(2000, ct);
         }
 
-        logger.LogInformation($"RequestAllParams: final {parameters.Count}/{totalExpected}");
+        logger.LogInformation("RequestAllParams: final {Got}/{Expected}", parameters.Count, totalExpected);
+
+        if (parameters.Count < totalExpected)
+        {
+            logger.LogWarning("Parameter read incomplete: {Got}/{Expected}", parameters.Count, totalExpected);
+        }
 
         // Remove duplicates by name, keeping the last received value.
         return parameters
@@ -249,7 +254,7 @@ public class MavLinkProtocol : ITelemetryProtocol
         // Check that the confirmed value is close to the one we set
         if (Math.Abs(confirmed.param_value - parameter.Value) > 0.001f)
         {
-            logger.LogDebug($"Note: {parameter.Name} sent={parameter.Value}, device stored={confirmed.param_value}");
+            logger.LogDebug("Note: {ParameterName} sent={SentValue}, device stored={StoredValue}", parameter.Name, parameter.Value, confirmed.param_value);
         }
 
         return true;
@@ -311,7 +316,7 @@ public class MavLinkProtocol : ITelemetryProtocol
 
         var versionString = $"{major}.{minor}.{patch}{typeSuffix}";
 
-        logger.LogInformation($"Firmware version: {versionString} (raw: 0x{version.flight_sw_version:X8})");
+        logger.LogInformation("Firmware version: {VersionString} (raw: 0x{RawVersion:X8})", versionString, version.flight_sw_version);
 
         return versionString;
     }
@@ -348,7 +353,7 @@ public class MavLinkProtocol : ITelemetryProtocol
 
         await port.WriteAsync(packet, 0, packet.Length, ct);
 
-        await WaitForMessageAsync(MAVLINK_MSG_ID.COMMAND_ACK, 5000, ct);
+        _ = await WaitForMessageAsync(MAVLINK_MSG_ID.COMMAND_ACK, 5000, ct);
     }
 
     public async Task RebootNormalAsync(CancellationToken ct)
@@ -407,7 +412,7 @@ public class MavLinkProtocol : ITelemetryProtocol
             ArduPilotConstants.MavSysId,
             ArduPilotConstants.MavCompId);
 
-        logger.LogDebug($"FlashBootloader: sending MAV_CMD_FLASH_BOOTLOADER ({ArduPilotConstants.MavCmdFlashBootloader}), param5={ArduPilotConstants.BootloaderMagicNumber}");
+        logger.LogDebug("FlashBootloader: sending MAV_CMD_FLASH_BOOTLOADER ({Command}), param5={Param5}", ArduPilotConstants.MavCmdFlashBootloader, ArduPilotConstants.BootloaderMagicNumber);
 
         await port.WriteAsync(packet, 0, packet.Length, ct);
 
@@ -423,12 +428,12 @@ public class MavLinkProtocol : ITelemetryProtocol
 
         var ack = (mavlink_command_ack_t)ackMsg.data;
 
-        logger.LogDebug($"FlashBootloader: ACK received, command={ack.command}, result={ack.result}");
+        logger.LogDebug("FlashBootloader: ACK received, command={Command}, result={Result}", ack.command, ack.result);
 
         // Check that ACK is for our command
         if (ack.command != ArduPilotConstants.MavCmdFlashBootloader)
         {
-            logger.LogDebug($"FlashBootloader: ACK for wrong command ({ack.command}), ignoring");
+            logger.LogDebug("FlashBootloader: ACK for wrong command ({Command}), ignoring", ack.command);
 
             return false;
         }
@@ -450,7 +455,7 @@ public class MavLinkProtocol : ITelemetryProtocol
             _ => $"UNKNOWN ({ack.result})"
         };
 
-        logger.LogWarning($"FlashBootloader: rejected with result={resultName}");
+        logger.LogWarning("FlashBootloader: rejected with result={ResultName}", resultName);
 
         return false;
     }
@@ -485,7 +490,7 @@ public class MavLinkProtocol : ITelemetryProtocol
                     {
                         messages.Add(text);
 
-                        logger.LogInformation($"STATUSTEXT: {text}");
+                        logger.LogInformation("STATUSTEXT: {Text}", text);
                     }
                 }
             }
@@ -691,7 +696,7 @@ public class MavLinkProtocol : ITelemetryProtocol
                         Value     = pv.param_value,
                         ParamType = pv.param_type
                     });
-                    receivedNames.Add(name);
+                    _ = receivedNames.Add(name);
                 }
                 break;
             }

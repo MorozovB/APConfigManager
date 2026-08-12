@@ -3,11 +3,19 @@ using System.Management;
 using System.Text.RegularExpressions;
 using APConfigManager.Core.Interfaces.Transport;
 using APConfigManager.Core.Models;
+using Microsoft.Extensions.Logging;
 
 namespace APConfigManager.Infrastructure.Transport
 {
     public class PortScanner : IPortScanner
     {
+        private readonly ILogger<PortScanner> logger;
+
+        public PortScanner(ILogger<PortScanner> logger)
+        {
+            this.logger = logger;
+        }
+
         /// <summary>
         /// Used to get a list of available COM ports on the system, sorted by port number.
         /// </summary>
@@ -181,6 +189,7 @@ namespace APConfigManager.Infrastructure.Transport
             }
             catch (OperationCanceledException)
             {
+                logger.LogWarning("Bootloader port did not appear within {Timeout}s (original {Port})", timeout.TotalSeconds, originalPort);
                 return null;
             }
         }

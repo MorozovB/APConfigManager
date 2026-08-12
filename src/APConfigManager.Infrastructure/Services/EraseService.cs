@@ -1,6 +1,8 @@
 using APConfigManager.Core.Exceptions;
 using APConfigManager.Core.Interfaces.Services;
 using APConfigManager.Core.Results;
+using APConfigManager.Infrastructure.Drivers.Ardupilot;
+using Microsoft.Extensions.Logging;
 
 namespace APConfigManager.Infrastructure.Services
 {
@@ -10,10 +12,12 @@ namespace APConfigManager.Infrastructure.Services
     public class EraseService : IEraseService
     {
         private readonly ISessionManager sessionManager;
+        private readonly ILogger<EraseService> logger;
 
-        public EraseService(ISessionManager sessionManager)
+        public EraseService(ISessionManager sessionManager, ILogger<EraseService> logger)
         {
             this.sessionManager = sessionManager;
+            this.logger = logger;
         }
 
         /// <summary>
@@ -21,6 +25,8 @@ namespace APConfigManager.Infrastructure.Services
         /// </summary>
         public async Task<EraseResult> EraseAsync(Guid sessionId, IProgress<(int, string)> progress, CancellationToken ct)
         {
+            logger.LogInformation("Erase requested for session {Id}", sessionId);
+
             ArgumentNullException.ThrowIfNull(progress);
 
             _ = sessionManager.GetSession(sessionId)
@@ -29,6 +35,11 @@ namespace APConfigManager.Infrastructure.Services
             var driver = sessionManager.GetDriver(sessionId);
 
             var result = await driver.EraseAsync(progress, ct);
+
+            if (!result.Success)
+            {
+                logger.LogWarning("Erase failed for session {Id}: {Error}", sessionId, result.ErrorMessage);
+            }
 
             if (result.Success)
             {
