@@ -1,6 +1,5 @@
 using APConfigManager.Api.Dto;
 using APConfigManager.Api.Hubs;
-using APConfigManager.Core.Exceptions;
 using APConfigManager.Core.Interfaces.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
@@ -43,49 +42,34 @@ public class FlashController : ControllerBase
         {
             return BadRequest("Firmware file is required.");
         }
+        using var stream = file.OpenReadStream();
 
-        try
+        var progress = new Progress<(int percent, string message)>(p =>
         {
-            using var stream = file.OpenReadStream();
+            _ = hubContext.Clients.Group(sessionId.ToString())
+                .SendAsync("FlashProgress", p.percent, p.message);
+        });
 
-            var progress = new Progress<(int percent, string message)>(p =>
-            {
-                _ = hubContext.Clients.Group(sessionId.ToString())
-                    .SendAsync("FlashProgress", p.percent, p.message);
-            });
+        var result = await flashService.FlashAsync(sessionId, stream, progress, ct);
 
-            var result = await flashService.FlashAsync(sessionId, stream, progress, ct);
+        if (result.Success)
+        {
+            StartTelemetryForwarding(sessionId);
 
-            if (result.Success)
-            {
-                StartTelemetryForwarding(sessionId);
-
-                await hubContext.Clients.Group(sessionId.ToString())
-                    .SendAsync("DeviceStateChanged", sessionId.ToString(), "Connected", ct);
-            }
-
+            var state = sessionManager.GetSession(sessionId)?.State.ToString() ?? "Disconnected";
             await hubContext.Clients.Group(sessionId.ToString())
-                .SendAsync("OperationCompleted", sessionId.ToString(), result, ct);
+                .SendAsync("DeviceStateChanged", sessionId.ToString(), state, ct);
+        }
 
-            return Ok(new OperationResultResponse
-            {
-                Success = result.Success,
-                Message = result.ErrorMessage ?? "Flash completed",
-                Data = result
-            });
-        }
-        catch (SessionException ex)
+        await hubContext.Clients.Group(sessionId.ToString())
+            .SendAsync("OperationCompleted", sessionId.ToString(), result, ct);
+
+        return Ok(new OperationResultResponse
         {
-            return NotFound(ex.Message);
-        }
-        catch (BootloaderException ex)
-        {
-            return BadRequest(ex.Message);
-        }
-        catch (DeviceConnectionException ex)
-        {
-            return StatusCode(503, ex.Message);
-        }
+            Success = result.Success,
+            Message = result.ErrorMessage ?? "Flash completed",
+            Data = result
+        });
     }
 
     private void StartTelemetryForwarding(Guid sessionId)

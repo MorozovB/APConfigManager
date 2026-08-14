@@ -1,3 +1,4 @@
+using APConfigManager.Api;
 using APConfigManager.Api.Hubs;
 using APConfigManager.Core.Data;
 using APConfigManager.Core.Interfaces.Parsers;
@@ -84,10 +85,15 @@ builder.Services.AddScoped<IFlashService, FlashService>();
 builder.Services.AddScoped<IEraseService, EraseService>();
 builder.Services.AddScoped<IParamService, ParamService>();
 
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
+
 // ─── Build ──────────────────────────────────────
 var app = builder.Build();
 
 // ─── Middleware ──────────────────────────────────
+app.UseExceptionHandler();
+
 if (app.Environment.IsDevelopment())
 {
     _ = app.UseSwagger();

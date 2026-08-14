@@ -51,7 +51,7 @@ public class SessionManager : ISessionManager, IAsyncDisposable
                 {
                     logger.LogWarning("Session limit reached ({Max})", MaxSessions);
 
-                    throw new SessionException($"Maximum of {MaxSessions} concurrent sessions reached.");
+                    throw new SessionLimitReachedException($"Maximum of {MaxSessions} concurrent sessions reached.");
                 }
 
                 var portInUse = sessions.Values.Any(s =>
@@ -61,7 +61,7 @@ public class SessionManager : ISessionManager, IAsyncDisposable
                 {
                     logger.LogWarning("Port {Port} already in use", port);
 
-                    throw new SessionException($"Port {port} is already in use by another session.");
+                    throw new PortInUseException($"Port {port} is already in use by another session.");
                 }
             }
 
@@ -108,6 +108,7 @@ public class SessionManager : ISessionManager, IAsyncDisposable
         lock (_stateLock)
         {
             sessions.TryGetValue(sessionId, out var session);
+
             return session;
         }
     }
@@ -139,7 +140,7 @@ public class SessionManager : ISessionManager, IAsyncDisposable
                 {
                     logger.LogWarning("Session {Id} not found", sessionId);
 
-                    throw new SessionException($"Session {sessionId} not found.");
+                    throw new SessionNotFoundException($"Session {sessionId} not found.");
                 }
             }
 
@@ -176,7 +177,7 @@ public class SessionManager : ISessionManager, IAsyncDisposable
             {
                 logger.LogWarning("Session {Id} not found", sessionId);
 
-                throw new SessionException($"Session {sessionId} not found.");
+                throw new SessionNotFoundException($"Session {sessionId} not found.");
             }
 
             return driver;

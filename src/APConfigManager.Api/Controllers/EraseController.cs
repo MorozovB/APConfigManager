@@ -1,6 +1,5 @@
 using APConfigManager.Api.Dto;
 using APConfigManager.Api.Hubs;
-using APConfigManager.Core.Exceptions;
 using APConfigManager.Core.Interfaces.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
@@ -15,11 +14,13 @@ namespace APConfigManager.Api.Controllers;
 public class EraseController : ControllerBase
 {
     private readonly IEraseService eraseService;
+    private readonly ISessionManager sessionManager;
     private readonly IHubContext<DeviceHub> hubContext;
 
-    public EraseController(IEraseService eraseService, IHubContext<DeviceHub> hubContext)
+    public EraseController(IEraseService eraseService, ISessionManager sessionManager, IHubContext<DeviceHub> hubContext)
     {
         this.eraseService = eraseService;
+        this.sessionManager = sessionManager;
         this.hubContext = hubContext;
     }
 
@@ -31,35 +32,30 @@ public class EraseController : ControllerBase
         Guid sessionId,
         CancellationToken ct)
     {
-        try
+
+        var progress = new Progress<(int percent, string message)>(async p =>
         {
-            var progress = new Progress<(int percent, string message)>(async p =>
-            {
-                await hubContext.Clients.Group(sessionId.ToString())
-                    .SendAsync("EraseProgress", p.percent, p.message);
-            });
-
-            var result = await eraseService.EraseAsync(sessionId, progress, ct);
-
-            if (result.Success)
-            {
-                await hubContext.Clients.Group(sessionId.ToString())
-                    .SendAsync("DeviceStateChanged", sessionId.ToString(), "Connected", ct);
-            }
-
             await hubContext.Clients.Group(sessionId.ToString())
-                .SendAsync("OperationCompleted", sessionId.ToString(), result, ct);
+                .SendAsync("EraseProgress", p.percent, p.message);
+        });
 
-            return Ok(new OperationResultResponse
-            {
-                Success = result.Success,
-                Message = result.ErrorMessage ?? "Erase completed",
-                Data = result
-            });
-        }
-        catch (SessionException ex)
+        var result = await eraseService.EraseAsync(sessionId, progress, ct);
+
+        if (result.Success)
         {
-            return NotFound(ex.Message);
+            var state = sessionManager.GetSession(sessionId)?.State.ToString() ?? "Disconnected";
+            await hubContext.Clients.Group(sessionId.ToString())
+                .SendAsync("DeviceStateChanged", sessionId.ToString(), state, ct);
         }
-    }
+
+        await hubContext.Clients.Group(sessionId.ToString())
+            .SendAsync("OperationCompleted", sessionId.ToString(), result, ct);
+
+        return Ok(new OperationResultResponse
+        {
+            Success = result.Success,
+            Message = result.ErrorMessage ?? "Erase completed",
+            Data = result
+        });
+}
 }

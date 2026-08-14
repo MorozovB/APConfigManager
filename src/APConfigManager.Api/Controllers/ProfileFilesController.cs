@@ -24,15 +24,9 @@ public class ProfileFilesController : ControllerBase
     [HttpGet("firmware")]
     public IActionResult GetFirmware(Guid profileId)
     {
-        try
-        {
-            var (stream, fileName) = profileFileService.OpenFirmware(profileId);
-            return File(stream, "application/octet-stream", fileName);
-        }
-        catch (FileNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
+
+        var (stream, fileName) = profileFileService.OpenFirmware(profileId);
+        return File(stream, "application/octet-stream", fileName);
     }
 
     /// <summary>
@@ -41,15 +35,8 @@ public class ProfileFilesController : ControllerBase
     [HttpGet("parameters")]
     public IActionResult GetParameters(Guid profileId)
     {
-        try
-        {
-            var (stream, fileName) = profileFileService.OpenParameters(profileId);
-            return File(stream, "application/octet-stream", fileName);
-        }
-        catch (FileNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
+        var (stream, fileName) = profileFileService.OpenParameters(profileId);
+        return File(stream, "application/octet-stream", fileName);
     }
 
     /// <summary>

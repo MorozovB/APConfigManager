@@ -35,47 +35,35 @@ namespace APConfigManager.Api.Controllers
             {
                 return BadRequest("Port is required.");
             }
+            var session = await sessionManager.CreateSessionAsync(request.Port, request.BaudRate, ct);
 
-            try
+            var response = new SessionResponse
             {
-                var session = await sessionManager.CreateSessionAsync(request.Port, request.BaudRate, ct);
+                Id = session.Id,
+                Port = session.Port,
+                BaudRate = session.BaudRate,
+                State = session.State.ToString(),
+                ConnectedAt = session.ConnectedAt,
+                DeviceSerial = session.DeviceSerial,
+                FirmwareVersion = session.FirmwareVersion,
+                FirmwareDescription = session.FirmwareDescription,
+                BootloaderRevision = session.BootloaderRevision
+            };
 
-                var response = new SessionResponse
+            if (session.State != DeviceState.InBootloader)
+            {
+                sessionManager.SetTelemetryCallback(session.Id, altitude =>
                 {
-                    Id = session.Id,
-                    Port = session.Port,
-                    BaudRate = session.BaudRate,
-                    State = session.State.ToString(),
-                    ConnectedAt = session.ConnectedAt,
-                    DeviceSerial = session.DeviceSerial,
-                    FirmwareVersion = session.FirmwareVersion,
-                    FirmwareDescription = session.FirmwareDescription,
-                    BootloaderRevision = session.BootloaderRevision
-                };
-
-                if (session.State != DeviceState.InBootloader)
-                {
-                    sessionManager.SetTelemetryCallback(session.Id, altitude =>
-                    {
-                        hubContext.Clients.Group(session.Id.ToString())
-                            .SendAsync("AltitudeUpdate", altitude);
-                    });
-                }
-
-                await hubContext.Clients.Group(session.Id.ToString())
-                    .SendAsync("DeviceStateChanged", session.Id.ToString(), "Connected", ct);
-
-                return Created($"/api/sessions/{response.Id}", response);
-
+                    hubContext.Clients.Group(session.Id.ToString())
+                        .SendAsync("AltitudeUpdate", altitude);
+                });
             }
-            catch (SessionException ex)
-            {
-                return Conflict(ex.Message);
-            }
-            catch (DeviceConnectionException ex)
-            {
-                return BadRequest(ex.Message);
-            }
+
+            var state = sessionManager.GetSession(session.Id)?.State.ToString() ?? "Disconnected";
+            await hubContext.Clients.Group(session.Id.ToString())
+                .SendAsync("DeviceStateChanged", session.Id.ToString(), state, ct);
+
+            return Created($"/api/sessions/{response.Id}", response);
         }
 
         /// <summary>
@@ -135,19 +123,13 @@ namespace APConfigManager.Api.Controllers
         [HttpDelete("{id:guid}")]
         public async Task<ActionResult> CloseSession(Guid id)
         {
-            try
-            {
-                await sessionManager.CloseSessionAsync(id);
 
-                await hubContext.Clients.Group(id.ToString())
-                    .SendAsync("DeviceStateChanged", id.ToString(), "Disconnected");
+            await sessionManager.CloseSessionAsync(id);
 
-                return NoContent();
-            }
-            catch (SessionException ex)
-            {
-                return NotFound(ex.Message);
-            }
+            await hubContext.Clients.Group(id.ToString())
+                .SendAsync("DeviceStateChanged", id.ToString(), "Disconnected");
+
+            return NoContent();
         }
 
     }

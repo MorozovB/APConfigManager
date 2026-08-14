@@ -1,7 +1,6 @@
 using System.IO.Ports;
 using APConfigManager.Core.Exceptions;
 using APConfigManager.Core.Interfaces.Transport;
-using APConfigManager.Infrastructure.Drivers.Ardupilot;
 using Microsoft.Extensions.Logging;
 
 namespace APConfigManager.Infrastructure.Transport;

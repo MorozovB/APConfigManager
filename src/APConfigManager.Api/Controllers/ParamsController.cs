@@ -37,32 +37,25 @@ namespace APConfigManager.Api.Controllers
                 return BadRequest("Parameter file is required");
             }
 
-            try
+            var stream = file.OpenReadStream();
+
+            var progress = new  Progress<(int current, int total)>(p =>
             {
-                var stream = file.OpenReadStream();
+                _ = hubContext.Clients.Group(sessionId.ToString())
+                    .SendAsync("ParamProgress", p.current, p.total);
+            });
 
-                var progress = new  Progress<(int current, int total)>(p =>
-                {
-                    _ = hubContext.Clients.Group(sessionId.ToString())
-                        .SendAsync("ParamProgress", p.current, p.total);
-                });
+            var result = await paramService.UploadAsync(sessionId, stream, progress, ct);
 
-                var result = await paramService.UploadAsync(sessionId, stream, progress, ct);
+            await hubContext.Clients.Group(sessionId.ToString())
+                .SendAsync("OperationCompleted", sessionId.ToString(), result);
 
-                await hubContext.Clients.Group(sessionId.ToString())
-                    .SendAsync("OperationCompleted", sessionId.ToString(), result);
-
-                return Ok(new OperationResultResponse
-                {
-                    Success = result.Success,
-                    Message = result.ErrorMessage ?? "Parameters uploaded",
-                    Data = result
-                });
-            }
-            catch (SessionException ex)
+            return Ok(new OperationResultResponse
             {
-                return NotFound(ex.Message);
-            }
+                Success = result.Success,
+                Message = result.ErrorMessage ?? "Parameters uploaded",
+                Data = result
+            });
         }
 
         /// <summary>
@@ -71,16 +64,9 @@ namespace APConfigManager.Api.Controllers
         [HttpGet]
         public async Task<ActionResult<List<Parameter>>> Download(Guid sessionId, CancellationToken ct)
         {
-            try
-            {
-                var parameters = await paramService.DownloadAsync(sessionId, ct);
+            var parameters = await paramService.DownloadAsync(sessionId, ct);
 
-                return Ok(parameters);
-            }
-            catch(SessionException ex)
-            {
-                return  NotFound(ex.Message);
-            }
+            return Ok(parameters);
         }
 
         /// <summary>
@@ -89,20 +75,13 @@ namespace APConfigManager.Api.Controllers
         [HttpPost("reset")]
         public async Task<ActionResult<OperationResultResponse>> Reset(Guid sessionId, CancellationToken ct)
         {
-            try
-            {
-                await paramService.ResetAsync(sessionId, ct);
+            await paramService.ResetAsync(sessionId, ct);
 
-                return Ok(new OperationResultResponse
-                {
-                    Success = true,
-                    Message = "Parameters reset to factory defaults",
-                });
-            }
-            catch (SessionException ex)
+            return Ok(new OperationResultResponse
             {
-                return NotFound(ex.Message);
-            }
+                Success = true,
+                Message = "Parameters reset to factory defaults",
+            });
         }
     }
 }

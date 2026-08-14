@@ -44,34 +44,24 @@ namespace APConfigManager.Api.Controllers
                 });
             }
 
-            try
-            {
-                var driver = sessionManager.GetDriver(sessionId);
-                var result = await driver.RebootAsync(BootMode.Normal, ct);
+            var driver = sessionManager.GetDriver(sessionId);
+            var result = await driver.RebootAsync(BootMode.Normal, ct);
 
-                if (result.Success)
-                {
-                    sessionManager.SyncSessionFromDriver(sessionId);
-                    StartTelemetryForwarding(sessionId);
-                    await hubContext.Clients.Group(sessionId.ToString())
-                        .SendAsync("DeviceStateChanged", sessionId.ToString(), "Connected", ct);
-                }
-
-                return Ok(new OperationResultResponse
-                {
-                    Success = result.Success,
-                    Message = result.Success ? "Device booted successfully" : result.ErrorMessage,
-                    Data = result
-                });
-            }
-            catch (Exception ex)
+            if (result.Success)
             {
-                return StatusCode(500, new OperationResultResponse
-                {
-                    Success = false,
-                    Message = $"Failed to boot device: {ex.Message}"
-                });
+                sessionManager.SyncSessionFromDriver(sessionId);
+                StartTelemetryForwarding(sessionId);
+                var state = sessionManager.GetSession(sessionId)?.State.ToString() ?? "Disconnected";
+                await hubContext.Clients.Group(sessionId.ToString())
+                    .SendAsync("DeviceStateChanged", sessionId.ToString(), state, ct);
             }
+
+            return Ok(new OperationResultResponse
+            {
+                Success = result.Success,
+                Message = result.Success ? "Device booted successfully" : result.ErrorMessage,
+                Data = result
+            });
         }
 
         /// <summary>
@@ -92,36 +82,27 @@ namespace APConfigManager.Api.Controllers
                 });
             }
 
-            try
-            {
-                var driver = sessionManager.GetDriver(sessionId);
-                var result = await driver.UpdateBootloaderAsync(ct);
+            var driver = sessionManager.GetDriver(sessionId);
+            var result = await driver.UpdateBootloaderAsync(ct);
 
-                if (result.Success)
-                {
-                    sessionManager.SyncSessionFromDriver(sessionId);
-                    StartTelemetryForwarding(sessionId);
-                    await hubContext.Clients.Group(sessionId.ToString())
-                        .SendAsync("DeviceStateChanged", sessionId.ToString(), "Connected", ct);
-                }
-
-                return Ok(new OperationResultResponse
-                {
-                    Success = result.Success,
-                    Message = result.Success
-                        ? "Bootloader updated successfully"
-                        : result.ErrorMessage,
-                    Data = result
-                });
-            }
-            catch (Exception ex)
+            if (result.Success)
             {
-                return StatusCode(500, new OperationResultResponse
-                {
-                    Success = false,
-                    Message = $"Bootloader update failed: {ex.Message}"
-                });
+                sessionManager.SyncSessionFromDriver(sessionId);
+                StartTelemetryForwarding(sessionId);
+                var state = sessionManager.GetSession(sessionId)?.State.ToString() ?? "Disconnected";
+                await hubContext.Clients.Group(sessionId.ToString())
+                    .SendAsync("DeviceStateChanged", sessionId.ToString(), state, ct);
             }
+
+            return Ok(new OperationResultResponse
+            {
+                Success = result.Success,
+                Message = result.Success
+                    ? "Bootloader updated successfully"
+                    : result.ErrorMessage,
+                Data = result
+            });
+
         }
 
         private void StartTelemetryForwarding(Guid sessionId)
