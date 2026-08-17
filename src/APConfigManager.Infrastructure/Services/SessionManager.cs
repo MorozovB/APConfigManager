@@ -237,6 +237,24 @@ public class SessionManager : ISessionManager, IAsyncDisposable
     }
 
     /// <summary>
+    /// Stops the telemetry loop for the session
+    /// </summary>
+    public async Task StopTelemetryAsync(Guid sessionId)
+    {
+        IAutopilotDriver? driver;
+
+        lock (_stateLock)
+        {
+            _ = drivers.TryGetValue(sessionId, out driver);
+        }
+
+        if (driver is not null)
+        {
+            await driver.StopTelemetryAsync();
+        }
+    }
+
+    /// <summary>
     /// Closes all active sessions and releases resources.
     /// </summary>
     public async ValueTask DisposeAsync()

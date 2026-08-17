@@ -1,5 +1,6 @@
 using APConfigManager.Api;
 using APConfigManager.Api.Hubs;
+using APConfigManager.Api.Services;
 using APConfigManager.Core.Data;
 using APConfigManager.Core.Interfaces.Parsers;
 using APConfigManager.Core.Interfaces.Services;
@@ -84,6 +85,7 @@ builder.Services.AddSingleton<IProfileFileService, ProfileFileService>();
 builder.Services.AddScoped<IFlashService, FlashService>();
 builder.Services.AddScoped<IEraseService, EraseService>();
 builder.Services.AddScoped<IParamService, ParamService>();
+builder.Services.AddSingleton<IDeviceNotifier, DeviceNotifier>();
 
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();

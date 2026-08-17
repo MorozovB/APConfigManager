@@ -49,5 +49,10 @@ namespace APConfigManager.Core.Interfaces.Services
         /// (useful for checking port availability when updating a session).
         /// </summary>
         List<string> GetOccupiedPorts(Guid? excludeSessionId = null);
+
+        /// <summary>
+        /// Stops the telemetry loop for the session (e.g. when the UI client disconnects).
+        /// </summary>
+        Task StopTelemetryAsync(Guid sessionId);
     }
 }

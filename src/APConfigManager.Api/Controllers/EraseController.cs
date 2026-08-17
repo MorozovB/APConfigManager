@@ -1,5 +1,6 @@
 using APConfigManager.Api.Dto;
 using APConfigManager.Api.Hubs;
+using APConfigManager.Api.Services;
 using APConfigManager.Core.Interfaces.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
@@ -14,14 +15,12 @@ namespace APConfigManager.Api.Controllers;
 public class EraseController : ControllerBase
 {
     private readonly IEraseService eraseService;
-    private readonly ISessionManager sessionManager;
-    private readonly IHubContext<DeviceHub> hubContext;
+    private readonly IDeviceNotifier notifier;
 
-    public EraseController(IEraseService eraseService, ISessionManager sessionManager, IHubContext<DeviceHub> hubContext)
+    public EraseController(IEraseService eraseService, IDeviceNotifier notifier)
     {
         this.eraseService = eraseService;
-        this.sessionManager = sessionManager;
-        this.hubContext = hubContext;
+        this.notifier = notifier;
     }
 
     /// <summary>
@@ -33,23 +32,17 @@ public class EraseController : ControllerBase
         CancellationToken ct)
     {
 
-        var progress = new Progress<(int percent, string message)>(async p =>
-        {
-            await hubContext.Clients.Group(sessionId.ToString())
-                .SendAsync("EraseProgress", p.percent, p.message);
-        });
+        var progress = new Progress<(int percent, string message)>(p =>
+            notifier.EraseProgress(sessionId, p.percent, p.message));
 
         var result = await eraseService.EraseAsync(sessionId, progress, ct);
 
         if (result.Success)
         {
-            var state = sessionManager.GetSession(sessionId)?.State.ToString() ?? "Disconnected";
-            await hubContext.Clients.Group(sessionId.ToString())
-                .SendAsync("DeviceStateChanged", sessionId.ToString(), state, ct);
+            notifier.StateChanged(sessionId);
         }
 
-        await hubContext.Clients.Group(sessionId.ToString())
-            .SendAsync("OperationCompleted", sessionId.ToString(), result, ct);
+        notifier.OperationCompleted(sessionId, result);
 
         return Ok(new OperationResultResponse
         {

@@ -1,5 +1,6 @@
 using APConfigManager.Api.Dto;
 using APConfigManager.Api.Hubs;
+using APConfigManager.Api.Services;
 using APConfigManager.Core.Interfaces.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
@@ -14,17 +15,14 @@ namespace APConfigManager.Api.Controllers;
 public class FlashController : ControllerBase
 {
     private readonly IFlashService flashService;
-    private readonly ISessionManager sessionManager;
-    private readonly IHubContext<DeviceHub> hubContext;
+    private readonly IDeviceNotifier notifier;
 
     public FlashController(
       IFlashService flashService,
-      ISessionManager sessionManager,
-      IHubContext<DeviceHub> hubContext)
+      IDeviceNotifier notifier)
     {
         this.flashService = flashService;
-        this.sessionManager = sessionManager;
-        this.hubContext = hubContext;
+        this.notifier = notifier;
     }
 
 
@@ -45,24 +43,17 @@ public class FlashController : ControllerBase
         using var stream = file.OpenReadStream();
 
         var progress = new Progress<(int percent, string message)>(p =>
-        {
-            _ = hubContext.Clients.Group(sessionId.ToString())
-                .SendAsync("FlashProgress", p.percent, p.message);
-        });
+            notifier.FlashProgress(sessionId, p.percent, p.message));
 
         var result = await flashService.FlashAsync(sessionId, stream, progress, ct);
 
         if (result.Success)
         {
-            StartTelemetryForwarding(sessionId);
-
-            var state = sessionManager.GetSession(sessionId)?.State.ToString() ?? "Disconnected";
-            await hubContext.Clients.Group(sessionId.ToString())
-                .SendAsync("DeviceStateChanged", sessionId.ToString(), state, ct);
+            notifier.StartTelemetryForwarding(sessionId);
+            notifier.StateChanged(sessionId);
         }
 
-        await hubContext.Clients.Group(sessionId.ToString())
-            .SendAsync("OperationCompleted", sessionId.ToString(), result, ct);
+        notifier.OperationCompleted(sessionId, result);
 
         return Ok(new OperationResultResponse
         {
@@ -71,14 +62,4 @@ public class FlashController : ControllerBase
             Data = result
         });
     }
-
-    private void StartTelemetryForwarding(Guid sessionId)
-    {
-        sessionManager.SetTelemetryCallback(sessionId, altitude =>
-        {
-            _ = hubContext.Clients.Group(sessionId.ToString())
-                .SendAsync("AltitudeUpdate", altitude);
-        });
-    }
-
 }
