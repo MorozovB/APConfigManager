@@ -61,11 +61,11 @@ public class FlashService : IFlashService
         {
             try
             {
-                var currentVersion = await driver.GetFirmwareVersionAsync(ct);
+                var deviceHash = await driver.GetFirmwareGitHashAsync(ct);
 
-                if (!string.IsNullOrWhiteSpace(currentVersion)
+                if (!string.IsNullOrWhiteSpace(deviceHash)
                     && !string.IsNullOrWhiteSpace(firmware.GitIdentity)
-                    && currentVersion.Equals(firmware.GitIdentity, StringComparison.OrdinalIgnoreCase))
+                    && firmware.GitIdentity.StartsWith(deviceHash, StringComparison.OrdinalIgnoreCase))
                 {
                     var sameVersionResult = new FlashResult
                     {
@@ -78,12 +78,11 @@ public class FlashService : IFlashService
                     sessionManager.SyncSessionFromDriver(sessionId);
 
                     return sameVersionResult;
-
                 }
             }
-            catch
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                // Device not responding — skip version check
+                logger.LogWarning(ex, "Could not read firmware hash; proceeding to flash");
             }
         }
 

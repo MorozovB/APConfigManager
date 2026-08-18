@@ -75,12 +75,14 @@ namespace APConfigManager.Api.Controllers
         [HttpPost("reset")]
         public async Task<ActionResult<OperationResultResponse>> Reset(Guid sessionId, CancellationToken ct)
         {
-            await paramService.ResetAsync(sessionId, ct);
+            var success = await paramService.ResetAsync(sessionId, ct);
 
             return Ok(new OperationResultResponse
             {
-                Success = true,
-                Message = "Parameters reset to factory defaults",
+                Success = success,
+                Message = success
+                    ? "Parameters reset to factory defaults"
+                    : "Device did not confirm parameter reset",
             });
         }
     }

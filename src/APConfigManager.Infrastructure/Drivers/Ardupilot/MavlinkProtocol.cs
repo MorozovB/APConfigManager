@@ -333,8 +333,14 @@ public class MavLinkProtocol : ITelemetryProtocol
     /// <summary>
     /// Sends MAV_CMD_PREFLIGHT_STORAGE (245) to reset parameters to defaults.
     /// </summary>
-    public async Task ResetParamsAsync(CancellationToken ct)
+    public async Task<bool> ResetParamsAsync(CancellationToken ct)
     {
+        for (var i = 0; i < 3; i++)
+        {
+            await SendHeartbeatAsync(ct);
+            await Task.Delay(500, ct);
+        }
+
         var command = new mavlink_command_long_t
         {
             target_system = 1,
@@ -345,15 +351,37 @@ public class MavLinkProtocol : ITelemetryProtocol
         };
 
         var packet = parser.GenerateMAVLinkPacket20(
-            MAVLINK_MSG_ID.COMMAND_LONG,
-            command,
-            false,
-            ArduPilotConstants.MavSysId,
-            ArduPilotConstants.MavCompId);
+            MAVLINK_MSG_ID.COMMAND_LONG, command, false,
+            ArduPilotConstants.MavSysId, ArduPilotConstants.MavCompId);
 
         await port.WriteAsync(packet, 0, packet.Length, ct);
 
-        _ = await WaitForMessageAsync(MAVLINK_MSG_ID.COMMAND_ACK, 5000, ct);
+        var ackMsg = await WaitForMessageAsync(MAVLINK_MSG_ID.COMMAND_ACK, 10000, ct);
+        if (ackMsg is null)
+        {
+            logger.LogWarning("ResetParams: no COMMAND_ACK (timeout 10s)");
+
+            return false;
+        }
+
+        var ack = (mavlink_command_ack_t)ackMsg.data;
+        if (ack.command != (ushort)MAV_CMD.PREFLIGHT_STORAGE)
+        {
+            logger.LogDebug("ResetParams: ACK for wrong command ({Command}), ignoring", ack.command);
+
+            return false;
+        }
+
+        if (ack.result == (byte)MAV_RESULT.ACCEPTED)
+        {
+            logger.LogInformation("Parameters reset accepted by device");
+
+            return true;
+        }
+
+        logger.LogWarning("ResetParams: device rejected reset (result={Result})", ack.result);
+
+        return false;
     }
 
     public async Task RebootNormalAsync(CancellationToken ct)
@@ -636,7 +664,49 @@ public class MavLinkProtocol : ITelemetryProtocol
         {
             return null;
         }
-    } 
+    }
+
+    /// <summary>
+    /// Reads the running firmware's git hash from AUTOPILOT_VERSION.flight_custom_version.
+    /// </summary>
+    public async Task<string> GetFirmwareGitHashAsync(CancellationToken ct)
+    {
+        for (var i = 0; i < 3; i++)
+        {
+            await SendHeartbeatAsync(ct);
+            await Task.Delay(500, ct);
+        }
+
+        var command = new mavlink_command_long_t
+        {
+            target_system = 1,
+            target_component = 1,
+            command = (ushort)MAV_CMD.REQUEST_MESSAGE,
+            confirmation = 0,
+            param1 = (uint)MAVLINK_MSG_ID.AUTOPILOT_VERSION
+        };
+
+        var packet = parser.GenerateMAVLinkPacket20(
+            MAVLINK_MSG_ID.COMMAND_LONG, command, false,
+            ArduPilotConstants.MavSysId, ArduPilotConstants.MavCompId);
+
+        await port.WriteAsync(packet, 0, packet.Length, ct);
+
+        var response = await WaitForMessageAsync(MAVLINK_MSG_ID.AUTOPILOT_VERSION, 3000, ct);
+
+        if (response is null)
+        {
+            logger.LogWarning("GetFirmwareGitHash: no AUTOPILOT_VERSION response");
+            return string.Empty;
+        }
+
+        var version = (mavlink_autopilot_version_t)response.data;
+        var hash = System.Text.Encoding.ASCII.GetString(version.flight_custom_version).TrimEnd('\0');
+
+        logger.LogDebug("Device firmware git hash: {Hash}", hash);
+
+        return hash;
+    }
 
     /// <summary>
     /// Requests individual missing parameters by index.

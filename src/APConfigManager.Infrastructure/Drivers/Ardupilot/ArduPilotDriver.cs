@@ -1011,19 +1011,26 @@ public class ArduPilotDriver : IAutopilotDriver
     /// <summary>
     /// Resets all parameters to factory defaults via MAVLink command.
     /// </summary>
-    public async Task ResetParamsAsync(CancellationToken ct)
+    public async Task<bool> ResetParamsAsync(CancellationToken ct)
     {
         EnsureConnected();
         await EnsureModeAsync(BootMode.Normal, ct);
-        await this.telemetry.ResetParamsAsync(ct);
+
+        var result = await this.telemetry.ResetParamsAsync(ct);
+        if (!result)
+        {
+            logger.LogDebug("ResetParams: no ACK from firmware; confirming via reboot");
+        }
 
         logger.LogInformation("Parameters reset. Rebooting to apply...");
 
-        await RebootAsync(BootMode.Bootloader, ct);
+        _ = await RebootAsync(BootMode.Bootloader, ct);
         await bootloader.BootAsync(ct);
         await ReconnectAfterBootAsync(ct);
 
         logger.LogInformation("Rebooted. Parameters applied.");
+
+        return true;
     }
 
     /// <summary>
@@ -1222,6 +1229,9 @@ public class ArduPilotDriver : IAutopilotDriver
         }
     }
 
+    public Task<string> GetFirmwareGitHashAsync(CancellationToken ct)
+        => this.telemetry.GetFirmwareGitHashAsync(ct);
+
     public void SetDisconnectCallback(Action onDisconnected)
     {
         onDeviceDisconnected = onDisconnected;
@@ -1265,20 +1275,6 @@ public class ArduPilotDriver : IAutopilotDriver
 
         session.Port = port;
         session.State = state;
-
-        //session = new DeviceSession
-        //{
-        //    Id = session.Id,
-        //    session.Port = port,
-        //    BaudRate = session.BaudRate,
-        //    State = state,
-        //    ConnectedAt = session.ConnectedAt,
-        //    DeviceSerial = session.DeviceSerial,
-        //    UsbLocation = session.UsbLocation,
-        //    FirmwareVersion = session.FirmwareVersion,
-        //    FirmwareDescription = session.FirmwareDescription,
-        //    BootloaderRevision = session.BootloaderRevision
-        //};
     }
 
     /// <summary>

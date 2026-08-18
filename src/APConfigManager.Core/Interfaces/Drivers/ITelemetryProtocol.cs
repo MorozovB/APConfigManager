@@ -40,7 +40,7 @@ namespace APConfigManager.Core.Interfaces.Drivers
         /// <summary>
         /// MAVLink CMD 245-reset parameters to defaults.
         /// </summary>
-        Task ResetParamsAsync(CancellationToken ct);
+        Task<bool> ResetParamsAsync(CancellationToken ct);
 
         /// <summary>
         /// MAVLink command to reboot the device into normal mode (if supported).
@@ -62,5 +62,10 @@ namespace APConfigManager.Core.Interfaces.Drivers
         /// The loop continues until the cancellation token is triggered.
         /// </summary>
         Task ReadTelemetryLoopAsync(Action<float> onAltitude, Action? onDisconnected, CancellationToken ct);
+
+        /// <summary>
+        /// Gets the git hash of the firmware currently running on the device.
+        /// </summary>
+        Task<string> GetFirmwareGitHashAsync(CancellationToken ct);
     }
 }

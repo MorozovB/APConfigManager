@@ -22,6 +22,6 @@ namespace APConfigManager.Core.Interfaces.Services
         /// <summary>
         /// Resetting Settings to Defaults
         /// </summary>
-        Task ResetAsync(Guid sessionId, CancellationToken ct);
+        Task<bool> ResetAsync(Guid sessionId, CancellationToken ct);
     }
 }

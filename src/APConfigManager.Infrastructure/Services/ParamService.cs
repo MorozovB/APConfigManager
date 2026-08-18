@@ -82,15 +82,16 @@ namespace APConfigManager.Infrastructure.Services
         /// Resets all parameters to factory defaults via MAVLink command.
         /// The driver handles mode switching and reboot internally.
         /// </summary>
-        public async Task ResetAsync(Guid sessionId, CancellationToken ct)
+        public async Task<bool> ResetAsync(Guid sessionId, CancellationToken ct)
         {
             _ = sessionManager.GetSession(sessionId)
-                ?? throw new SessionException($"Session {sessionId} not found.");
+                ?? throw new SessionNotFoundException($"Session {sessionId} not found.");
 
             var driver = sessionManager.GetDriver(sessionId);
-            await driver.ResetParamsAsync(ct);
+            var success = await driver.ResetParamsAsync(ct);
 
             sessionManager.SyncSessionFromDriver(sessionId);
+            return success;
         }
     }
 }

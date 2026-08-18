@@ -54,7 +54,7 @@ namespace APConfigManager.Core.Interfaces.Drivers
         /// <summary>
         /// Resets all parameters to factory defaults.
         /// </summary>
-        Task ResetParamsAsync(CancellationToken ct);
+        Task<bool> ResetParamsAsync(CancellationToken ct);
 
         /// <summary>
         /// Updates the bootloader on the device.
@@ -89,5 +89,10 @@ namespace APConfigManager.Core.Interfaces.Drivers
         /// This allows the application to handle disconnection events gracefully.
         /// </summary>
         void SetDisconnectCallback(Action onDisconnected);
+
+        /// <summary>
+        /// Retrieves the firmware git hash from the connected device.
+        /// </summary>
+        Task<string> GetFirmwareGitHashAsync(CancellationToken ct);
     }
 }

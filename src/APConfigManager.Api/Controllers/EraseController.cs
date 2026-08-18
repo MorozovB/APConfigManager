@@ -1,9 +1,7 @@
 using APConfigManager.Api.Dto;
-using APConfigManager.Api.Hubs;
 using APConfigManager.Api.Services;
 using APConfigManager.Core.Interfaces.Services;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.SignalR;
 
 namespace APConfigManager.Api.Controllers;
 
@@ -50,5 +48,5 @@ public class EraseController : ControllerBase
             Message = result.ErrorMessage ?? "Erase completed",
             Data = result
         });
-}
+    }
 }
