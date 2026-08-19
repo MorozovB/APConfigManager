@@ -1,3 +1,5 @@
+using APConfigManager.Core.Models;
+
 namespace APConfigManager.Api.Dto
 {
     /// <summary>
@@ -22,5 +24,18 @@ namespace APConfigManager.Api.Dto
         public uint BootloaderRevision { get; set; }
 
         public string FirmwareDescription { get; set; } = string.Empty;
+
+        public static SessionResponse From(DeviceSession session) => new()
+        {
+            Id = session.Id,
+            Port = session.Port,
+            BaudRate = session.BaudRate,
+            State = session.State.ToString(),
+            ConnectedAt = session.ConnectedAt,
+            DeviceSerial = session.DeviceSerial,
+            FirmwareVersion = session.FirmwareVersion,
+            FirmwareDescription = session.FirmwareDescription,
+            BootloaderRevision = session.BootloaderRevision
+        };
     }
 }

@@ -1,7 +1,6 @@
 using APConfigManager.Api.Dto;
 using APConfigManager.Api.Hubs;
 using APConfigManager.Core.Enums;
-using APConfigManager.Core.Exceptions;
 using APConfigManager.Core.Interfaces.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
@@ -37,24 +36,13 @@ namespace APConfigManager.Api.Controllers
             }
             var session = await sessionManager.CreateSessionAsync(request.Port, request.BaudRate, ct);
 
-            var response = new SessionResponse
-            {
-                Id = session.Id,
-                Port = session.Port,
-                BaudRate = session.BaudRate,
-                State = session.State.ToString(),
-                ConnectedAt = session.ConnectedAt,
-                DeviceSerial = session.DeviceSerial,
-                FirmwareVersion = session.FirmwareVersion,
-                FirmwareDescription = session.FirmwareDescription,
-                BootloaderRevision = session.BootloaderRevision
-            };
+            var response = SessionResponse.From(session);
 
             if (session.State != DeviceState.InBootloader)
             {
                 sessionManager.SetTelemetryCallback(session.Id, altitude =>
                 {
-                    hubContext.Clients.Group(session.Id.ToString())
+                    _ = hubContext.Clients.Group(session.Id.ToString())
                         .SendAsync("AltitudeUpdate", altitude);
                 });
             }
@@ -73,18 +61,7 @@ namespace APConfigManager.Api.Controllers
         public ActionResult<List<SessionResponse>> GetAllSessions()
         {
             var sessions = sessionManager.GetAllSessions();
-            var response = sessions.Select(session => new SessionResponse
-            {
-                Id = session.Id,
-                Port = session.Port,
-                BaudRate = session.BaudRate,
-                State = session.State.ToString(),
-                ConnectedAt = session.ConnectedAt,
-                DeviceSerial = session.DeviceSerial,
-                FirmwareVersion = session.FirmwareVersion,
-                FirmwareDescription = session.FirmwareDescription,
-                BootloaderRevision = session.BootloaderRevision
-            }).ToList();
+            var response = sessions.Select(SessionResponse.From).ToList();
 
             return Ok(response);
         }
@@ -101,18 +78,7 @@ namespace APConfigManager.Api.Controllers
                 return NotFound();
             }
 
-            var response = new SessionResponse
-            {
-                Id = session.Id,
-                Port = session.Port,
-                BaudRate = session.BaudRate,
-                State = session.State.ToString(),
-                ConnectedAt = session.ConnectedAt,
-                DeviceSerial = session.DeviceSerial,
-                FirmwareVersion = session.FirmwareVersion,
-                FirmwareDescription = session.FirmwareDescription,
-                BootloaderRevision = session.BootloaderRevision
-            };
+            var response = SessionResponse.From(session);
 
             return Ok(response);
         }

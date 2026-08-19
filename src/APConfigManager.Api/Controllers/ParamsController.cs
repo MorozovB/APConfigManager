@@ -1,6 +1,5 @@
 using APConfigManager.Api.Dto;
 using APConfigManager.Api.Hubs;
-using APConfigManager.Core.Exceptions;
 using APConfigManager.Core.Interfaces.Services;
 using APConfigManager.Core.Models;
 using Microsoft.AspNetCore.Mvc;
@@ -66,7 +65,11 @@ namespace APConfigManager.Api.Controllers
         {
             var parameters = await paramService.DownloadAsync(sessionId, ct);
 
-            return Ok(parameters);
+            var response = parameters
+                .Select(p => new ParameterResponse { Name = p.Name, Value = p.Value, ParamType = p.ParamType })
+                .ToList();
+
+            return Ok(response);
         }
 
         /// <summary>
