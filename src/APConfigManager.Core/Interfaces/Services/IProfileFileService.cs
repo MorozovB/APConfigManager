@@ -34,4 +34,9 @@ public interface IProfileFileService
     /// Resolves a path to a full absolute path when the file exists.
     /// </summary>
     string NormalizePath(Guid profileId, string path);
+
+    /// <summary>
+    /// Deletes all stored files for the profile (its upload folder).
+    /// </summary>
+    void DeleteProfileFiles(Guid profileId);
 }

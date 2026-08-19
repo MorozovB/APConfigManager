@@ -1,59 +1,32 @@
 using APConfigManager.Api.Dto;
-using APConfigManager.Api.Hubs;
-using APConfigManager.Core.Enums;
+using APConfigManager.Api.Services;
 using APConfigManager.Core.Interfaces.Services;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.SignalR;
 
 namespace APConfigManager.Api.Controllers
 {
-    /// <summary>
-    /// Handles device boot mode switching.
-    /// </summary>
     [ApiController]
     [Route("api/sessions/{sessionId:guid}/boot")]
     public class BootController : ControllerBase
     {
-        private readonly ISessionManager sessionManager;
+        private readonly IBootService bootService;
+        private readonly IDeviceNotifier notifier;
 
-        private readonly IHubContext<DeviceHub> hubContext;
-
-
-        public BootController(ISessionManager sessionManager, IHubContext<DeviceHub> hubContext)
+        public BootController(IBootService bootService, IDeviceNotifier notifier)
         {
-            this.sessionManager = sessionManager;
-            this.hubContext = hubContext;
+            this.bootService = bootService;
+            this.notifier = notifier;
         }
 
-        /// <summary>
-        /// POST /api/sessions/{id}/boot — boots the device from bootloader to normal mode.
-        /// </summary>
         [HttpPost]
-        public async Task<ActionResult<OperationResultResponse>> Boot(
-            Guid sessionId,
-            CancellationToken ct)
+        public async Task<ActionResult<OperationResultResponse>> Boot(Guid sessionId, CancellationToken ct)
         {
-            var session = sessionManager.GetSession(sessionId);
-
-            if (session is null)
-            {
-                return NotFound(new OperationResultResponse
-                {
-                    Success = false,
-                    Message = "Session not found"
-                });
-            }
-
-            var driver = sessionManager.GetDriver(sessionId);
-            var result = await driver.RebootAsync(BootMode.Normal, ct);
+            var result = await bootService.BootAsync(sessionId, ct);
 
             if (result.Success)
             {
-                sessionManager.SyncSessionFromDriver(sessionId);
-                StartTelemetryForwarding(sessionId);
-                var state = sessionManager.GetSession(sessionId)?.State.ToString() ?? "Disconnected";
-                await hubContext.Clients.Group(sessionId.ToString())
-                    .SendAsync("DeviceStateChanged", sessionId.ToString(), state, ct);
+                notifier.StartTelemetryForwarding(sessionId);
+                notifier.StateChanged(sessionId);
             }
 
             return Ok(new OperationResultResponse
@@ -64,55 +37,23 @@ namespace APConfigManager.Api.Controllers
             });
         }
 
-        /// <summary>
-        /// POST /api/sessions/{sessionId}/boot/update-bootloader — updates the bootloader from running firmware.
-        /// </summary>
         [HttpPost("update-bootloader")]
-        public async Task<ActionResult<OperationResultResponse>> UpdateBootloader(
-            Guid sessionId,
-            CancellationToken ct)
+        public async Task<ActionResult<OperationResultResponse>> UpdateBootloader(Guid sessionId, CancellationToken ct)
         {
-            var session = sessionManager.GetSession(sessionId);
-            if (session is null)
-            {
-                return NotFound(new OperationResultResponse
-                {
-                    Success = false,
-                    Message = "Session not found"
-                });
-            }
-
-            var driver = sessionManager.GetDriver(sessionId);
-            var result = await driver.UpdateBootloaderAsync(ct);
+            var result = await bootService.UpdateBootloaderAsync(sessionId, ct);
 
             if (result.Success)
             {
-                sessionManager.SyncSessionFromDriver(sessionId);
-                StartTelemetryForwarding(sessionId);
-                var state = sessionManager.GetSession(sessionId)?.State.ToString() ?? "Disconnected";
-                await hubContext.Clients.Group(sessionId.ToString())
-                    .SendAsync("DeviceStateChanged", sessionId.ToString(), state, ct);
+                notifier.StartTelemetryForwarding(sessionId);
+                notifier.StateChanged(sessionId);
             }
 
             return Ok(new OperationResultResponse
             {
                 Success = result.Success,
-                Message = result.Success
-                    ? "Bootloader updated successfully"
-                    : result.ErrorMessage,
+                Message = result.Success ? "Bootloader updated successfully" : result.ErrorMessage,
                 Data = result
             });
-
         }
-
-        private void StartTelemetryForwarding(Guid sessionId)
-        {
-            sessionManager.SetTelemetryCallback(sessionId, altitude =>
-            {
-                _ = hubContext.Clients.Group(sessionId.ToString())
-                    .SendAsync("AltitudeUpdate", altitude);
-            });
-        }
-
     }
 }

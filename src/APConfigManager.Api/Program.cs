@@ -85,6 +85,7 @@ builder.Services.AddSingleton<IProfileFileService, ProfileFileService>();
 builder.Services.AddScoped<IFlashService, FlashService>();
 builder.Services.AddScoped<IEraseService, EraseService>();
 builder.Services.AddScoped<IParamService, ParamService>();
+builder.Services.AddScoped<IBootService, BootService>();
 builder.Services.AddSingleton<IDeviceNotifier, DeviceNotifier>();
 
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();

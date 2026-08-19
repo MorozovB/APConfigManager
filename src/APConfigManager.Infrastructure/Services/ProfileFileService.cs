@@ -108,6 +108,16 @@ namespace APConfigManager.Infrastructure.Services
             return candidates.Distinct(StringComparer.OrdinalIgnoreCase);
         }
 
+        public void DeleteProfileFiles(Guid profileId)
+        {
+            var dir = Path.Combine(profileFilesRoot, profileId.ToString());
+
+            if (Directory.Exists(dir))
+            {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+
         private DeviceProfile GetProfileOrThrow(Guid profileId)
         {
             return repository.GetById(profileId)
