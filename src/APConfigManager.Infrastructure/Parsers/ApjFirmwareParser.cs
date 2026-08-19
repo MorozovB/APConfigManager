@@ -153,10 +153,11 @@ namespace APConfigManager.Infrastructure.Parsers
 
             try
             {
-                using var input = new MemoryStream(compressed, 2, compressed.Length - 2); // skip the 2-byte header before deflate.
-                using var deflate = new DeflateStream(input, CompressionMode.Decompress);
+                using var input = new MemoryStream(compressed);
+                using var zlib = new ZLibStream(input, CompressionMode.Decompress);
                 using var output = new MemoryStream();
-                deflate.CopyTo(output);
+                zlib.CopyTo(output);
+
                 return output.ToArray();
             }
             catch (Exception ex)
