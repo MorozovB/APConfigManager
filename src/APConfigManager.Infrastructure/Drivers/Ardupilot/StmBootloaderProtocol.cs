@@ -94,7 +94,7 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
             if (!await SyncAsync(ct))
             {
                 throw new BootloaderException("Bootloader sync failed before reading device info.");
-            }   
+            }
 
             var boardId = await ReadRegisterAsync(ArduPilotConstants.GET_DEVICE, ArduPilotConstants.InfoBoardId, ct);
             var boardRevision = await ReadRegisterAsync(ArduPilotConstants.GET_DEVICE, ArduPilotConstants.InfoBoardRev, ct);
@@ -123,29 +123,7 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
 
             await port.WriteAsync(command, 0, command.Length, ct);
 
-            var response = new byte[2];
-            var bytesRead = 0;
-
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            cts.CancelAfter(ArduPilotConstants.EraseTimeoutMs);
-
-            // Wait for response with a timeout. While loop to read exactly 2 bytes, handling partial reads.
-            try
-            {
-                while (bytesRead < 2)
-                {
-                    var read = await port.ReadAsync(response, bytesRead, 2 - bytesRead, cts.Token);
-                    if (read == 0)
-                    {
-                        throw new BootloaderException("Connection lost during chip erase.");
-                    }
-                    bytesRead += read;
-                }
-            }
-            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-            {
-                throw new BootloaderException($"Chip erase timed out after {ArduPilotConstants.EraseTimeoutMs} ms");
-            }
+            var response = await ReadExactAsync(2, ArduPilotConstants.EraseTimeoutMs, "chip erase", ct);
 
             CheckResponse(response);
         }
@@ -233,72 +211,68 @@ namespace APConfigManager.Infrastructure.Drivers.Ardupilot
         }
 
         /// <summary>
-        /// Sends a GET_DEVICE command and reads a 4-byte unsigned integer response.
+        /// Reads exactly <paramref name="count"/> bytes from the port within the timeout,
+        /// handling partial reads. Throws BootloaderException on lost connection or timeout.
         /// </summary>
-        private async Task<uint> ReadRegisterAsync(byte command, byte infoType, CancellationToken ct)
+        private async Task<byte[]> ReadExactAsync(int count, int timeoutMs, string operation, CancellationToken ct)
         {
-            var request = new byte[] { command, infoType, ArduPilotConstants.EOC };
-            await port.WriteAsync(request, 0, request.Length, ct);
-
-            var response = new byte[6];
+            var buffer = new byte[count];
             var bytesRead = 0;
 
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            cts.CancelAfter(3000);
+            cts.CancelAfter(timeoutMs);
 
-            // Wait for response with a timeout. While loop to read exactly 6 bytes, handling partial reads.
             try
             {
-                while (bytesRead < 6)
+                while (bytesRead < count)
                 {
-                    var read = await port.ReadAsync(response, bytesRead, 6 - bytesRead, cts.Token);
+                    var read = await port.ReadAsync(buffer, bytesRead, count - bytesRead, cts.Token);
                     if (read == 0)
-                        throw new BootloaderException("Connection lost while reading device info.");
+                    {
+                        throw new BootloaderException($"Connection lost during {operation}.");
+                    }
                     bytesRead += read;
                 }
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {
-                throw new BootloaderException($"Timeout reading device info. Got {bytesRead}/6 bytes.");
+                throw new BootloaderException($"Timeout during {operation}. Got {bytesRead}/{count} bytes.");
             }
+
+            return buffer;
+        }
+
+        /// <summary>
+        /// Writes a request and reads a 4-byte unsigned integer response (6-byte frame: value + INSYNC/OK).
+        /// </summary>
+        private async Task<uint> ReadUInt32ResponseAsync(byte[] request, string operation, CancellationToken ct)
+        {
+            await port.WriteAsync(request, 0, request.Length, ct);
+
+            var response = await ReadExactAsync(6, 3000, operation, ct);
 
             CheckResponse(response);
             return BitConverter.ToUInt32(response, 0);
         }
 
         /// <summary>
+        /// Sends a GET_DEVICE command and reads a 4-byte unsigned integer response.
+        /// </summary>
+        private Task<uint> ReadRegisterAsync(byte command, byte infoType, CancellationToken ct)
+            => ReadUInt32ResponseAsync(
+                new byte[] { command, infoType, ArduPilotConstants.EOC },
+                "device info read",
+                ct);
+
+        /// <summary>
         /// Sends a command and reads a 4-byte unsigned integer response (no info_type).
         /// Used by GET_CRC.
         /// </summary>
-        private async Task<uint> ReadRegisterAsync(byte command, CancellationToken ct)
-        {
-            var request = new byte[] { command, ArduPilotConstants.EOC };
-            await port.WriteAsync(request, 0, request.Length, ct);
-
-            var response = new byte[6];
-            var bytesRead = 0;
-
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            cts.CancelAfter(3000);
-
-            try
-            {
-                while (bytesRead < 6)
-                {
-                    var read = await port.ReadAsync(response, bytesRead, 6 - bytesRead, cts.Token);
-                    if (read == 0)
-                        throw new BootloaderException("Connection lost.");
-                    bytesRead += read;
-                }
-            }
-            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-            {
-                throw new BootloaderException($"Timeout reading response. Got {bytesRead}/6 bytes.");
-            }
-
-            CheckResponse(response);
-            return BitConverter.ToUInt32(response, 0);
-        }
+        private Task<uint> ReadRegisterAsync(byte command, CancellationToken ct)
+            => ReadUInt32ResponseAsync(
+                new byte[] { command, ArduPilotConstants.EOC },
+                "CRC read",
+                ct);
 
 
         /// <summary>

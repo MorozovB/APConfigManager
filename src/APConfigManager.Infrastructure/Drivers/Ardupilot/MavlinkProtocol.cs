@@ -15,6 +15,8 @@ public class MavLinkProtocol : ITelemetryProtocol
     private readonly MavlinkParse parser;
     private readonly ILogger<MavLinkProtocol> logger;
 
+    private const int HeartbeatPreambleDelayMs = 500;
+
     /// <summary>
     /// Initializes the MAVLink protocol with a serial port adapter.
     /// </summary>
@@ -24,6 +26,91 @@ public class MavLinkProtocol : ITelemetryProtocol
         this.logger = logger;
         parser = new MavlinkParse();
     }
+
+    // ─── Private helpers (shared building blocks) ────────────────────────────
+
+    /// <summary>Builds and writes any MAVLink packet to the port.</summary>
+    private async Task SendPacketAsync(MAVLINK_MSG_ID msgId, object message, CancellationToken ct)
+    {
+        var packet = parser.GenerateMAVLinkPacket20(
+            msgId,
+            message,
+            false,
+            ArduPilotConstants.MavSysId,
+            ArduPilotConstants.MavCompId);
+
+        await port.WriteAsync(packet, 0, packet.Length, ct);
+    }
+
+    /// <summary>
+    /// Sends the 3-heartbeat preamble so the autopilot routes ACKs/replies back to us
+    /// (it ignores commands without a recent GCS heartbeat stream).
+    /// </summary>
+    private async Task EstablishGcsPresenceAsync(CancellationToken ct)
+    {
+        for (var i = 0; i < 3; i++)
+        {
+            await SendHeartbeatAsync(ct);
+            await Task.Delay(HeartbeatPreambleDelayMs, ct);
+        }
+    }
+
+    /// <summary>Builds and sends a COMMAND_LONG (target is always 1/1).</summary>
+    private Task SendCommandAsync(
+        ushort command,
+        CancellationToken ct,
+        float param1 = 0, float param2 = 0, float param3 = 0, float param4 = 0,
+        float param5 = 0, float param6 = 0, float param7 = 0)
+    {
+        var cmd = new mavlink_command_long_t
+        {
+            target_system = 1,
+            target_component = 1,
+            command = command,
+            confirmation = 0,
+            param1 = param1,
+            param2 = param2,
+            param3 = param3,
+            param4 = param4,
+            param5 = param5,
+            param6 = param6,
+            param7 = param7
+        };
+
+        return SendPacketAsync(MAVLINK_MSG_ID.COMMAND_LONG, cmd, ct);
+    }
+
+    /// <summary>
+    /// Sends a COMMAND_LONG and waits for the COMMAND_ACK. Returns the ACK, or null on timeout.
+    /// The caller decides how to interpret command/result.
+    /// </summary>
+    private async Task<mavlink_command_ack_t?> SendCommandAndWaitAckAsync(
+        ushort command,
+        int timeoutMs,
+        CancellationToken ct,
+        float param1 = 0, float param2 = 0, float param3 = 0, float param4 = 0,
+        float param5 = 0, float param6 = 0, float param7 = 0)
+    {
+        await SendCommandAsync(command, ct, param1, param2, param3, param4, param5, param6, param7);
+
+        var ackMsg = await WaitForMessageAsync(MAVLINK_MSG_ID.COMMAND_ACK, timeoutMs, ct);
+        if (ackMsg is null)
+        {
+            return null;
+        }
+
+        return (mavlink_command_ack_t)ackMsg.data;
+    }
+
+    /// <summary>Establishes presence, requests a specific message via REQUEST_MESSAGE, and waits for it.</summary>
+    private async Task<MAVLinkMessage?> RequestMessageAsync(MAVLINK_MSG_ID msgId, int timeoutMs, CancellationToken ct)
+    {
+        await EstablishGcsPresenceAsync(ct);
+        await SendCommandAsync((ushort)MAV_CMD.REQUEST_MESSAGE, ct, param1: (uint)msgId);
+        return await WaitForMessageAsync(msgId, timeoutMs, ct);
+    }
+
+    // ─── Public protocol methods ─────────────────────────────────────────────
 
     /// <summary>
     /// Sends a MAVLink HEARTBEAT message to maintain connection with the autopilot.
@@ -39,39 +126,14 @@ public class MavLinkProtocol : ITelemetryProtocol
             mavlink_version = 3
         };
 
-        var packet = parser.GenerateMAVLinkPacket20(
-            MAVLINK_MSG_ID.HEARTBEAT,
-            heartbeat,
-            false,
-            ArduPilotConstants.MavSysId,
-            ArduPilotConstants.MavCompId);
-
-        await port.WriteAsync(packet, 0, packet.Length, ct);
+        await SendPacketAsync(MAVLINK_MSG_ID.HEARTBEAT, heartbeat, ct);
     }
 
     /// <summary>
     /// Sends MAV_CMD_PREFLIGHT_REBOOT_SHUTDOWN (246) to reboot into bootloader.
     /// </summary>
-    public async Task RebootToBootloaderAsync(CancellationToken ct)
-    {
-        var command = new mavlink_command_long_t
-        {
-            target_system = 1,
-            target_component = 1,
-            command = (ushort)MAV_CMD.PREFLIGHT_REBOOT_SHUTDOWN,
-            confirmation = 0,
-            param1 = 3
-        };
-
-        var packet = parser.GenerateMAVLinkPacket20(
-            MAVLINK_MSG_ID.COMMAND_LONG,
-            command,
-            false,
-            ArduPilotConstants.MavSysId,
-            ArduPilotConstants.MavCompId);
-
-        await port.WriteAsync(packet, 0, packet.Length, ct);
-    }
+    public Task RebootToBootloaderAsync(CancellationToken ct)
+        => SendCommandAsync((ushort)MAV_CMD.PREFLIGHT_REBOOT_SHUTDOWN, ct, param1: 3);
 
     /// <summary>
     /// Requests all parameters from the autopilot via PARAM_REQUEST_LIST.
@@ -79,18 +141,15 @@ public class MavLinkProtocol : ITelemetryProtocol
     public async Task<List<Parameter>> RequestAllParamsAsync(CancellationToken ct)
     {
         // Establish GCS presence — autopilot ignores commands without heartbeat stream
-        for (var i = 0; i < 3; i++)
-        {
-            await SendHeartbeatAsync(ct);
-            await Task.Delay(500, ct);
-        }
+        await EstablishGcsPresenceAsync(ct);
 
         var request = new mavlink_param_request_list_t
         {
-            target_system    = 1,
+            target_system = 1,
             target_component = 1
         };
 
+        // Generated once and re-sent in the retry loop (keeps the same sequence bytes on the wire).
         var packet = parser.GenerateMAVLinkPacket20(
             MAVLINK_MSG_ID.PARAM_REQUEST_LIST,
             request,
@@ -98,7 +157,7 @@ public class MavLinkProtocol : ITelemetryProtocol
             ArduPilotConstants.MavSysId,
             ArduPilotConstants.MavCompId);
 
-        var parameters  = new List<Parameter>();
+        var parameters = new List<Parameter>();
         var totalExpected = -1;
 
         for (var attempt = 1; attempt <= 5; attempt++)
@@ -113,7 +172,7 @@ public class MavLinkProtocol : ITelemetryProtocol
             // Right after boot the autopilot sends many non-PARAM_VALUE packets
             // (heartbeat, statustext, system_time) which were incorrectly
             // eating through the null budget and breaking the loop early.
-            var idleDeadline  = DateTime.UtcNow.AddSeconds(4); // reset on each received param
+            var idleDeadline = DateTime.UtcNow.AddSeconds(4); // reset on each received param
             var absoluteLimit = DateTime.UtcNow.AddSeconds(60);
 
             while (DateTime.UtcNow < absoluteLimit)
@@ -153,13 +212,13 @@ public class MavLinkProtocol : ITelemetryProtocol
 
                 parameters.Add(new Parameter
                 {
-                    Name      = name,
-                    Value     = paramValue.param_value,
+                    Name = name,
+                    Value = paramValue.param_value,
                     ParamType = paramValue.param_type
                 });
 
                 totalExpected = paramValue.param_count;
-                idleDeadline  = DateTime.UtcNow.AddSeconds(4); // reset idle window
+                idleDeadline = DateTime.UtcNow.AddSeconds(4); // reset idle window
 
                 if (parameters.Count >= totalExpected)
                 {
@@ -209,7 +268,6 @@ public class MavLinkProtocol : ITelemetryProtocol
     /// </summary>
     public async Task<bool> SetParamAsync(Parameter parameter, CancellationToken ct)
     {
-        
         var paramId = new byte[16];
         var nameBytes = System.Text.Encoding.ASCII.GetBytes(parameter.Name);
         Array.Copy(nameBytes, paramId, Math.Min(nameBytes.Length, 16));
@@ -223,14 +281,7 @@ public class MavLinkProtocol : ITelemetryProtocol
             param_type = parameter.ParamType
         };
 
-        var packet = parser.GenerateMAVLinkPacket20(
-            MAVLINK_MSG_ID.PARAM_SET,
-            paramSet,
-            false,
-            ArduPilotConstants.MavSysId,
-            ArduPilotConstants.MavCompId);
-
-        await port.WriteAsync(packet, 0, packet.Length, ct);
+        await SendPacketAsync(MAVLINK_MSG_ID.PARAM_SET, paramSet, ct);
 
         var response = await WaitForMessageAsync(
             MAVLINK_MSG_ID.PARAM_VALUE,
@@ -261,38 +312,11 @@ public class MavLinkProtocol : ITelemetryProtocol
     }
 
     /// <summary>
-    /// Retrieves the firmware git hash from the autopilot.
+    /// Retrieves the firmware version string from the autopilot (AUTOPILOT_VERSION.flight_sw_version).
     /// </summary>
     public async Task<string> GetFirmwareVersionAsync(CancellationToken ct)
     {
-        for (var i = 0; i < 3; i++)
-        {
-            await SendHeartbeatAsync(ct);
-            await Task.Delay(500, ct);
-        }
-
-        var command = new mavlink_command_long_t
-        {
-            target_system = 1,
-            target_component = 1,
-            command = (ushort)MAV_CMD.REQUEST_MESSAGE,
-            confirmation = 0,
-            param1 = (uint)MAVLINK_MSG_ID.AUTOPILOT_VERSION
-        };
-
-        var packet = parser.GenerateMAVLinkPacket20(
-            MAVLINK_MSG_ID.COMMAND_LONG,
-            command,
-            false,
-            ArduPilotConstants.MavSysId,
-            ArduPilotConstants.MavCompId);
-
-        await port.WriteAsync(packet, 0, packet.Length, ct);
-
-        var response = await WaitForMessageAsync(
-            MAVLINK_MSG_ID.AUTOPILOT_VERSION,
-            3000,
-            ct);
+        var response = await RequestMessageAsync(MAVLINK_MSG_ID.AUTOPILOT_VERSION, 3000, ct);
 
         if (response is null)
             return string.Empty;
@@ -335,74 +359,39 @@ public class MavLinkProtocol : ITelemetryProtocol
     /// </summary>
     public async Task<bool> ResetParamsAsync(CancellationToken ct)
     {
-        for (var i = 0; i < 3; i++)
-        {
-            await SendHeartbeatAsync(ct);
-            await Task.Delay(500, ct);
-        }
+        await EstablishGcsPresenceAsync(ct);
 
-        var command = new mavlink_command_long_t
-        {
-            target_system = 1,
-            target_component = 1,
-            command = (ushort)MAV_CMD.PREFLIGHT_STORAGE,
-            confirmation = 0,
-            param1 = 2
-        };
+        var ack = await SendCommandAndWaitAckAsync(
+            (ushort)MAV_CMD.PREFLIGHT_STORAGE, 10000, ct, param1: 2);
 
-        var packet = parser.GenerateMAVLinkPacket20(
-            MAVLINK_MSG_ID.COMMAND_LONG, command, false,
-            ArduPilotConstants.MavSysId, ArduPilotConstants.MavCompId);
-
-        await port.WriteAsync(packet, 0, packet.Length, ct);
-
-        var ackMsg = await WaitForMessageAsync(MAVLINK_MSG_ID.COMMAND_ACK, 10000, ct);
-        if (ackMsg is null)
+        if (ack is null)
         {
             logger.LogWarning("ResetParams: no COMMAND_ACK (timeout 10s)");
 
             return false;
         }
 
-        var ack = (mavlink_command_ack_t)ackMsg.data;
-        if (ack.command != (ushort)MAV_CMD.PREFLIGHT_STORAGE)
+        if (ack.Value.command != (ushort)MAV_CMD.PREFLIGHT_STORAGE)
         {
-            logger.LogDebug("ResetParams: ACK for wrong command ({Command}), ignoring", ack.command);
+            logger.LogDebug("ResetParams: ACK for wrong command ({Command}), ignoring", ack.Value.command);
 
             return false;
         }
 
-        if (ack.result == (byte)MAV_RESULT.ACCEPTED)
+        if (ack.Value.result == (byte)MAV_RESULT.ACCEPTED)
         {
             logger.LogInformation("Parameters reset accepted by device");
 
             return true;
         }
 
-        logger.LogWarning("ResetParams: device rejected reset (result={Result})", ack.result);
+        logger.LogWarning("ResetParams: device rejected reset (result={Result})", ack.Value.result);
 
         return false;
     }
 
-    public async Task RebootNormalAsync(CancellationToken ct)
-    {
-        var command = new mavlink_command_long_t
-        {
-            target_system = 1,
-            target_component = 1,
-            command = (ushort)MAV_CMD.PREFLIGHT_REBOOT_SHUTDOWN,
-            param1 = 1  // 1 = normal reboot, NOT bootloader
-        };
-
-        var packet = parser.GenerateMAVLinkPacket20(
-            MAVLINK_MSG_ID.COMMAND_LONG,
-            command,
-            false,
-            ArduPilotConstants.MavSysId,
-            ArduPilotConstants.MavCompId);
-
-        await port.WriteAsync(packet, 0, packet.Length, ct);
-    }
+    public Task RebootNormalAsync(CancellationToken ct)
+        => SendCommandAsync((ushort)MAV_CMD.PREFLIGHT_REBOOT_SHUTDOWN, ct, param1: 1); // 1 = normal reboot, NOT bootloader
 
     /// <summary>
     /// Sends MAV_CMD_FLASH_BOOTLOADER command and waits for ACK.
@@ -411,76 +400,47 @@ public class MavLinkProtocol : ITelemetryProtocol
     public async Task<bool> FlashBootloaderAsync(CancellationToken ct)
     {
         // Establish GCS presence
-        for (var i = 0; i < 3; i++)
-        {
-            await SendHeartbeatAsync(ct);
-            await Task.Delay(500, ct);
-        }
-
-        // Build COMMAND_LONG packet
-        var command = new mavlink_command_long_t
-        {
-            target_system = 1,
-            target_component = 1,
-            command = ArduPilotConstants.MavCmdFlashBootloader,
-            confirmation = 0,
-            param1 = 0,
-            param2 = 0,
-            param3 = 0,
-            param4 = 0,
-            param5 = ArduPilotConstants.BootloaderMagicNumber,
-            param6 = 0,
-            param7 = 0
-        };
-
-        var packet = parser.GenerateMAVLinkPacket20(
-            MAVLINK_MSG_ID.COMMAND_LONG,
-            command,
-            false,
-            ArduPilotConstants.MavSysId,
-            ArduPilotConstants.MavCompId);
+        await EstablishGcsPresenceAsync(ct);
 
         logger.LogDebug("FlashBootloader: sending MAV_CMD_FLASH_BOOTLOADER ({Command}), param5={Param5}", ArduPilotConstants.MavCmdFlashBootloader, ArduPilotConstants.BootloaderMagicNumber);
 
-        await port.WriteAsync(packet, 0, packet.Length, ct);
+        // Bootloader write takes 5-15 seconds
+        var ack = await SendCommandAndWaitAckAsync(
+            ArduPilotConstants.MavCmdFlashBootloader, 30000, ct,
+            param5: ArduPilotConstants.BootloaderMagicNumber);
 
-        // Wait for COMMAND_ACK — bootloader write takes 5-15 seconds
-        var ackMsg = await WaitForMessageAsync(MAVLINK_MSG_ID.COMMAND_ACK, 30000, ct);
-
-        if (ackMsg is null)
+        if (ack is null)
         {
             logger.LogWarning("FlashBootloader: no ACK received (timeout 30s)");
 
             return false;
         }
 
-        var ack = (mavlink_command_ack_t)ackMsg.data;
-
-        logger.LogDebug("FlashBootloader: ACK received, command={Command}, result={Result}", ack.command, ack.result);
+        logger.LogDebug("FlashBootloader: ACK received, command={Command}, result={Result}", ack.Value.command, ack.Value.result);
 
         // Check that ACK is for our command
-        if (ack.command != ArduPilotConstants.MavCmdFlashBootloader)
+        if (ack.Value.command != ArduPilotConstants.MavCmdFlashBootloader)
         {
-            logger.LogDebug("FlashBootloader: ACK for wrong command ({Command}), ignoring", ack.command);
+            logger.LogDebug("FlashBootloader: ACK for wrong command ({Command}), ignoring", ack.Value.command);
 
             return false;
         }
 
         // MAV_RESULT.ACCEPTED = 0
-        if (ack.result == (byte)MAV_RESULT.ACCEPTED)
+        if (ack.Value.result == (byte)MAV_RESULT.ACCEPTED)
         {
             logger.LogInformation("FlashBootloader: bootloader updated successfully");
 
             return true;
         }
 
-        var resultName = ack.result switch
+        var resultName = ack.Value.result switch
         {
             1 => "TEMPORARILY_REJECTED",
             2 => "DENIED",
             3 => "UNSUPPORTED",
             4 => "FAILED",
-            _ => $"UNKNOWN ({ack.result})"
+            _ => $"UNKNOWN ({ack.Value.result})"
         };
 
         logger.LogWarning("FlashBootloader: rejected with result={ResultName}", resultName);
@@ -657,7 +617,7 @@ public class MavLinkProtocol : ITelemetryProtocol
                 if (msg.msgid == (uint)messageId)
                 {
                     return msg;
-                }  
+                }
             }
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
@@ -671,28 +631,7 @@ public class MavLinkProtocol : ITelemetryProtocol
     /// </summary>
     public async Task<string> GetFirmwareGitHashAsync(CancellationToken ct)
     {
-        for (var i = 0; i < 3; i++)
-        {
-            await SendHeartbeatAsync(ct);
-            await Task.Delay(500, ct);
-        }
-
-        var command = new mavlink_command_long_t
-        {
-            target_system = 1,
-            target_component = 1,
-            command = (ushort)MAV_CMD.REQUEST_MESSAGE,
-            confirmation = 0,
-            param1 = (uint)MAVLINK_MSG_ID.AUTOPILOT_VERSION
-        };
-
-        var packet = parser.GenerateMAVLinkPacket20(
-            MAVLINK_MSG_ID.COMMAND_LONG, command, false,
-            ArduPilotConstants.MavSysId, ArduPilotConstants.MavCompId);
-
-        await port.WriteAsync(packet, 0, packet.Length, ct);
-
-        var response = await WaitForMessageAsync(MAVLINK_MSG_ID.AUTOPILOT_VERSION, 3000, ct);
+        var response = await RequestMessageAsync(MAVLINK_MSG_ID.AUTOPILOT_VERSION, 3000, ct);
 
         if (response is null)
         {
@@ -728,20 +667,13 @@ public class MavLinkProtocol : ITelemetryProtocol
             // Request by index
             var command = new mavlink_param_request_read_t
             {
-                target_system    = 1,
+                target_system = 1,
                 target_component = 1,
-                param_index      = (short)idx,
-                param_id         = new byte[16]
+                param_index = (short)idx,
+                param_id = new byte[16]
             };
 
-            var packet = parser.GenerateMAVLinkPacket20(
-                MAVLINK_MSG_ID.PARAM_REQUEST_READ,
-                command,
-                false,
-                ArduPilotConstants.MavSysId,
-                ArduPilotConstants.MavCompId);
-
-            await port.WriteAsync(packet, 0, packet.Length, ct);
+            await SendPacketAsync(MAVLINK_MSG_ID.PARAM_REQUEST_READ, command, ct);
 
             // Wait up to 500 ms for this specific param 
             var deadline = DateTime.UtcNow.AddMilliseconds(500);
@@ -753,7 +685,7 @@ public class MavLinkProtocol : ITelemetryProtocol
                 if (msg?.data is null) continue;
                 if (msg.msgid != (uint)MAVLINK_MSG_ID.PARAM_VALUE) continue;
 
-                var pv   = (mavlink_param_value_t)msg.data;
+                var pv = (mavlink_param_value_t)msg.data;
                 var name = System.Text.Encoding.ASCII
                     .GetString(pv.param_id)
                     .TrimEnd('\0');
@@ -762,8 +694,8 @@ public class MavLinkProtocol : ITelemetryProtocol
                 {
                     received.Add(new Parameter
                     {
-                        Name      = name,
-                        Value     = pv.param_value,
+                        Name = name,
+                        Value = pv.param_value,
                         ParamType = pv.param_type
                     });
                     _ = receivedNames.Add(name);
