@@ -28,7 +28,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowLocalhost", policy =>
     {
-        policy.WithOrigins("http://localhost:5173", "http://localhost:3000")
+        _ = policy.WithOrigins("http://localhost:5173", "http://localhost:3000")
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -41,7 +41,9 @@ var dbFolder = Path.Combine(
     "APConfigManager");
 
 if (!Directory.Exists(dbFolder))
-    Directory.CreateDirectory(dbFolder);
+{
+    _ = Directory.CreateDirectory(dbFolder);
+}
 
 var dbPath = Path.Combine(dbFolder, "app.db");
 
@@ -63,6 +65,8 @@ builder.Services.AddSingleton<ISessionManager>(sp =>
 {
     var portScanner = sp.GetRequiredService<IPortScanner>();
     var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
+    var uploadStrategy = new ParameterUploadStrategy(
+        loggerFactory.CreateLogger<ParameterUploadStrategy>());
     SessionManager? manager = null;
 
     manager = new SessionManager(
@@ -74,6 +78,7 @@ builder.Services.AddSingleton<ISessionManager>(sp =>
         var telemetry = new MavLinkProtocol(port, loggerFactory.CreateLogger<MavLinkProtocol>());
         return new ArduPilotDriver(port, bootloader, telemetry, portScanner,
             loggerFactory.CreateLogger<ArduPilotDriver>(),
+            uploadStrategy,
             excludeId => manager!.GetOccupiedPorts(excludeId));
     });
 
