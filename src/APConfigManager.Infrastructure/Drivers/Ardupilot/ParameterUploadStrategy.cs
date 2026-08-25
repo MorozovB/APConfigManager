@@ -94,17 +94,40 @@ public class ParameterUploadStrategy : IParameterUploadStrategy
         var sent = 0;
         var skippedSame = 0;
 
+        ParameterUploadResult Fail(string message) => new()
+        {
+            Success = false,
+            Sent = sent,
+            Failed = 0,
+            Total = parameters.Count,
+            ErrorMessage = message
+        };
+
+        if (!await telemetry.AreCoreSensorsHealthyAsync(5000, ct))
+        {
+            logger.LogError("Core sensors not healthy after upload — board appears faulty");
+
+            return Fail("The board is connected, but the sensors are not working (zero readings in the GCS)—a memory or sensor failure is likely. Success has not been confirmed.");
+        }
+
         try
         {
             logger.LogInformation("Resetting parameters to defaults before upload...");
 
-            await telemetry.ResetParamsAsync(ct);
+            _ = await telemetry.ResetParamsAsync(ct);
             await Task.Delay(1000, ct);
             await telemetry.RebootNormalAsync(ct);
             port.Close();
             await context.ReconnectAfterReboot(ct);
 
             var deviceParams = await telemetry.RequestAllParamsAsync(ct);
+
+            if (deviceParams.Count == 0)
+            {
+                logger.LogError("Parameter read returned 0 — storage controller not responding");
+
+                return Fail("Unable to read parameters from the board—the storage controller is not responding. The write operation has been interrupted.");
+            }
 
             // Build a dictionary of device parameters for quick lookup by name.
             var deviceMap = deviceParams

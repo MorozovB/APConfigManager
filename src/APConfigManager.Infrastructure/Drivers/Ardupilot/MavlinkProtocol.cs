@@ -491,6 +491,58 @@ public class MavLinkProtocol : ITelemetryProtocol
     }
 
     /// <summary>
+    /// Checks if the core sensors (gyro and accelerometer) are healthy by reading SYS_STATUS messages within a specified timeout.
+    /// </summary>
+    public async Task<bool> AreCoreSensorsHealthyAsync(int timeoutMs, CancellationToken ct)
+    {
+        await EstablishGcsPresenceAsync(ct);
+
+        // MAV_SYS_STATUS_SENSOR bits
+        const uint Gyro = 1;   // 3D gyro
+        const uint Accel = 2;   // 3D accel
+        const uint Core = Gyro | Accel;
+
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+
+        while (DateTime.UtcNow < deadline)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            MAVLinkMessage? msg = null;
+            try
+            {
+                msg = await RequestMessageAsync(MAVLINK_MSG_ID.SYS_STATUS, 2000, ct);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch
+            {
+
+            }
+
+            if (msg?.data is mavlink_sys_status_t status)
+            {
+                var enabled = status.onboard_control_sensors_enabled & Core;
+                var healthy = status.onboard_control_sensors_health & Core;
+
+                if (enabled == Core && healthy == Core)
+                {
+                    return true;
+                }
+
+                logger.LogWarning(
+                    "Core sensors not healthy: enabled=0x{En:X} health=0x{He:X}",
+                    status.onboard_control_sensors_enabled,
+                    status.onboard_control_sensors_health);
+            }
+
+            await Task.Delay(300, ct);
+        }
+
+        return false;
+    }
+
+
+    /// <summary>
     /// Reads and parses a single MAVLink message from the port.
     /// </summary>
     private async Task<MAVLinkMessage?> ReadMessageAsync(CancellationToken ct)

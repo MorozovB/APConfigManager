@@ -67,5 +67,10 @@ namespace APConfigManager.Core.Interfaces.Drivers
         /// Gets the git hash of the firmware currently running on the device.
         /// </summary>
         Task<string> GetFirmwareGitHashAsync(CancellationToken ct);
+
+        /// <summary>
+        /// Checks if the core sensors of the device are healthy within a specified timeout.
+        /// </summary>
+        Task<bool> AreCoreSensorsHealthyAsync(int timeoutMs, CancellationToken ct);
     }
 }
