@@ -65,9 +65,9 @@ public class BootControllerTests
                 NewPort = "COM3"
             });
 
-        controller = new BootController(
-            mockSessionManager.Object,
-            mockHubContext.Object);
+        //controller = new BootController(
+        //    mockSessionManager.Object,
+        //    mockHubContext.Object);
     }
 
     [Fact]

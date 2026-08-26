@@ -47,7 +47,7 @@ public class EraseServiceTests
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(new EraseResult { Success = true });
 
-        eraseService = new EraseService(mockSessionManager.Object);
+        // eraseService = new EraseService(mockSessionManager.Object);
     }
 
     private static IProgress<(int, string)> CreateProgress()

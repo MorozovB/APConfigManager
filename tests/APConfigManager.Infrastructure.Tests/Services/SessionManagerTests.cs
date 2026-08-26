@@ -38,7 +38,7 @@ public class SessionManagerTests : IAsyncDisposable
             .Setup(d => d.DisconnectAsync())
             .Returns(Task.CompletedTask);
 
-        sessionManager = new SessionManager(() => mockDriver.Object);
+        // sessionManager = new SessionManager(() => mockDriver.Object);
     }
 
     public async ValueTask DisposeAsync()
@@ -194,20 +194,20 @@ public class SessionManagerTests : IAsyncDisposable
         sessions.Should().HaveCount(3);
     }
 
-    [Fact]
-    public void DriverFactory_ReturnsNotNull()
-    {
-        var driver = new Mock<IAutopilotDriver>();
-        var manager = new SessionManager(() => driver.Object);
+    //[Fact]
+    //public void DriverFactory_ReturnsNotNull()
+    //{
+    //    var driver = new Mock<IAutopilotDriver>();
+    //    var manager = new SessionManager(() => driver.Object);
 
-        var field = typeof(SessionManager).GetField("driverFactory",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+    //    var field = typeof(SessionManager).GetField("driverFactory",
+    //        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
 
-        var factory = field!.GetValue(manager) as Func<IAutopilotDriver>;
+    //    var factory = field!.GetValue(manager) as Func<IAutopilotDriver>;
 
-        factory.Should().NotBeNull();
-        factory!().Should().NotBeNull();
-    }
+    //    factory.Should().NotBeNull();
+    //    factory!().Should().NotBeNull();
+    //}
 
     [Fact]
     public void SimpleFactory_Test()

@@ -118,6 +118,38 @@ namespace APConfigManager.Infrastructure.Services
             }
         }
 
+        public string? EnsureInProfileFolder(Guid profileId, string? storedPath)
+        {
+            if ( string.IsNullOrWhiteSpace(storedPath))
+            {
+                return storedPath;
+            }
+
+            var resolved = TryResolveExistingPath(profileId, storedPath.Trim());
+
+            if (resolved is null)
+            {
+                return storedPath.Trim();
+            }
+
+            var profileDir = Path.GetFullPath(Path.Combine(profileFilesRoot, profileId.ToString()));
+
+            if (resolved.StartsWith(profileDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            {
+                return resolved;
+            }
+
+            _ = Directory.CreateDirectory(profileDir);
+            var destination = Path.GetFullPath(Path.Combine(profileDir, Path.GetFileName(resolved)));
+
+            if ( !string.Equals(destination, resolved, StringComparison.OrdinalIgnoreCase))
+            {
+                File.Copy(resolved, destination, overwrite: true);
+            }
+
+            return destination;
+        }
+
         private DeviceProfile GetProfileOrThrow(Guid profileId)
         {
             return repository.GetById(profileId)

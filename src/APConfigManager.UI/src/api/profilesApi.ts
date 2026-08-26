@@ -7,7 +7,7 @@ export const getProfiles = async (): Promise<DeviceProfile[]> => {
 };
 
 export const saveProfile = async (profile: DeviceProfile): Promise<void> => {
-  await apiClient.post('/profiles', profile);
+    await apiClient.put(`/profiles/${profile.id}`, profile);
 };
 
 export const deleteProfile = async (profileId: string): Promise<void> => {

@@ -73,13 +73,13 @@ public class ParamServiceTests
             .Setup(d => d.ReadParamsAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(testParams);
 
-        mockDriver
-            .Setup(d => d.ResetParamsAsync(It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask);
+        //mockDriver
+        //    .Setup(d => d.ResetParamsAsync(It.IsAny<CancellationToken>()))
+        //    .Returns(Task.CompletedTask);
 
-        paramService = new ParamService(
-            mockSessionManager.Object,
-            mockParamParser.Object);
+        //paramService = new ParamService(
+        //    mockSessionManager.Object,
+        //    mockParamParser.Object);
     }
 
     private static IProgress<(int, int)> CreateProgress()

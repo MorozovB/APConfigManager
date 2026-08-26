@@ -52,7 +52,7 @@ public class ProfilesController : ControllerBase
             return BadRequest("Profile is required");
         }
 
-        var profile = MapToDomain(id, request);   // Id из маршрута, не из тела
+        var profile = MapToDomain(id, request);
         NormalizeProfilePaths(profile);
         repository.Save(profile);
 
@@ -87,12 +87,12 @@ public class ProfilesController : ControllerBase
     {
         if (!string.IsNullOrWhiteSpace(profile.FirmwareFilePath))
         {
-            profile.FirmwareFilePath = profileFileService.ResolveStoredPath(profile.Id, profile.FirmwareFilePath);
+            profile.FirmwareFilePath = profileFileService.EnsureInProfileFolder(profile.Id, profile.FirmwareFilePath);
         }
 
         if (!string.IsNullOrWhiteSpace(profile.ParameterFilePath))
         {
-            profile.ParameterFilePath = profileFileService.ResolveStoredPath(profile.Id, profile.ParameterFilePath);
+            profile.ParameterFilePath = profileFileService.EnsureInProfileFolder(profile.Id, profile.ParameterFilePath);
         }
     }
 }

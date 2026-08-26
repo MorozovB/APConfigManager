@@ -92,12 +92,15 @@ builder.Services.AddScoped<IEraseService, EraseService>();
 builder.Services.AddScoped<IParamService, ParamService>();
 builder.Services.AddScoped<IBootService, BootService>();
 builder.Services.AddSingleton<IDeviceNotifier, DeviceNotifier>();
+builder.Services.AddSingleton<ProfileStorageMigration>();
 
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 
 // ─── Build ──────────────────────────────────────
 var app = builder.Build();
+
+app.Services.GetRequiredService<ProfileStorageMigration>().Run();
 
 // ─── Middleware ──────────────────────────────────
 app.UseExceptionHandler();

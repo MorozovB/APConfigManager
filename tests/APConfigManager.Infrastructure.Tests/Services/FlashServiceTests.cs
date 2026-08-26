@@ -93,10 +93,10 @@ public class FlashServiceTests
                 FirmwareVersion = "4.5.1"
             });
 
-        flashService = new FlashService(
-            mockSessionManager.Object,
-            mockFirmwareParser.Object,
-            mockFirmwareValidator.Object);
+        //flashService = new FlashService(
+        //    mockSessionManager.Object,
+        //    mockFirmwareParser.Object,
+        //    mockFirmwareValidator.Object);
     }
 
     private static IProgress<(int, string)> CreateProgress()

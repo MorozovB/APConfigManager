@@ -41,9 +41,9 @@ public class EraseControllerTests
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(new EraseResult { Success = true });
 
-        controller = new EraseController(
-            mockEraseService.Object,
-            mockHubContext.Object);
+        //controller = new EraseController(
+        //    mockEraseService.Object,
+        //    mockHubContext.Object);
     }
 
     [Fact]

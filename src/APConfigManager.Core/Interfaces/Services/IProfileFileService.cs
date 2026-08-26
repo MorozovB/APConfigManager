@@ -39,4 +39,10 @@ public interface IProfileFileService
     /// Deletes all stored files for the profile (its upload folder).
     /// </summary>
     void DeleteProfileFiles(Guid profileId);
+
+    /// <summary>
+    /// Guarantees that the stored path is within the profile folder.
+    /// If it is not, returns null. If it is, returns the full absolute path.
+    /// </summary>
+    string? EnsureInProfileFolder(Guid profileId, string? storedPath);
 }

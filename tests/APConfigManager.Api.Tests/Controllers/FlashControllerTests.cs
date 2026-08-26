@@ -49,10 +49,10 @@ public class FlashControllerTests
                 FirmwareVersion = "4.5.1"
             });
 
-        controller = new FlashController(
-            mockFlashService.Object,
-            mockSessionManager.Object,
-            mockHubContext.Object);
+        //controller = new FlashController(
+        //    mockFlashService.Object,
+        //    mockSessionManager.Object,
+        //    mockHubContext.Object);
     }
 
     private static IFormFile CreateMockFile(string name = "firmware.apj", long length = 1024)

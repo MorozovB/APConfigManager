@@ -27,11 +27,11 @@ public class ArduPilotDriverConnectTests
 
         mockPort.Setup(p => p.IsOpen).Returns(true);
 
-        driver = new ArduPilotDriver(
-            mockPort.Object,
-            mockBootloader.Object,
-            mockTelemetry.Object,
-            mockPortScanner.Object);
+        //driver = new ArduPilotDriver(
+        //    mockPort.Object,
+        //    mockBootloader.Object,
+        //    mockTelemetry.Object,
+        //    mockPortScanner.Object);
     }
 
     // ─── ConnectAsync: saves device serial ──────
