@@ -23,5 +23,16 @@ namespace APConfigManager.Core.Interfaces.Services
         /// Resetting Settings to Defaults
         /// </summary>
         Task<bool> ResetAsync(Guid sessionId, CancellationToken ct);
+
+        /// <summary>
+        /// Reads a single parameter from the device.
+        /// </summary>
+        Task<Parameter?> ReadParameterAsync(Guid sessionId, string name, CancellationToken ct);
+
+
+        /// <summary>
+        /// Sets a single parameter to the device.
+        /// </summary>
+        Task<bool> SetParameterAsync(Guid sessionId, string name, float value, CancellationToken ct);
     }
 }

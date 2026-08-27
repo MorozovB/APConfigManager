@@ -93,6 +93,31 @@ namespace APConfigManager.Infrastructure.Services
             sessionManager.SyncSessionFromDriver(sessionId);
             return success;
         }
+
+        public async Task<Parameter?> ReadParameterAsync(Guid sessionId, string name, CancellationToken ct)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+            _ = sessionManager.GetSession(sessionId)
+                ?? throw new SessionNotFoundException($"Session {sessionId} not found.");
+
+            var driver = sessionManager.GetDriver(sessionId);
+            return await driver.ReadParameterAsync(name, ct);
+        }
+
+        public async Task<bool> SetParameterAsync(Guid sessionId, string name, float value, CancellationToken ct)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+            _ = sessionManager.GetSession(sessionId)
+                ?? throw new SessionNotFoundException($"Session {sessionId} not found.");
+
+            var driver = sessionManager.GetDriver(sessionId);
+            var success = await driver.SetParameterAsync(new Parameter { Name = name, Value = value }, ct);
+
+            sessionManager.SyncSessionFromDriver(sessionId);
+            return success;
+        }
     }
 }
 

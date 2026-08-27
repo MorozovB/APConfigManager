@@ -542,6 +542,50 @@ public class MavLinkProtocol : ITelemetryProtocol
     }
 
 
+    public async Task<Parameter?> ReadParameterAsync(string name, CancellationToken ct)
+    {
+        var paramId = new byte[16];
+        var nameBytes = System.Text.Encoding.ASCII.GetBytes(name);
+        Array.Copy(nameBytes, paramId, Math.Min(nameBytes.Length, 16));
+
+        var request = new mavlink_param_request_read_t
+        {
+            target_system = 1,
+            target_component = 1,
+            param_id = paramId,
+            param_index = -1, // -1 means "use param name instead of index"
+        };
+
+        await SendPacketAsync(MAVLINK_MSG_ID.PARAM_REQUEST_READ, request, ct);
+
+        var deadline = DateTime.UtcNow.AddMilliseconds(3000);
+        while (DateTime.UtcNow < deadline)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var remaining = (int)(deadline - DateTime.UtcNow).TotalMilliseconds;
+            if (remaining <= 0) break;
+
+            var response = await WaitForMessageAsync(MAVLINK_MSG_ID.PARAM_VALUE, remaining, ct);
+            if (response is null) break;
+
+            var value = (mavlink_param_value_t)response.data;
+            var valueName = System.Text.Encoding.ASCII.GetString(value.param_id).TrimEnd('\0');
+
+            if (valueName.Equals(name, StringComparison.OrdinalIgnoreCase))
+            {
+                return new Parameter
+                {
+                    Name = valueName,
+                    Value = value.param_value,
+                    ParamType = (byte)value.param_type,
+                };
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>
     /// Reads and parses a single MAVLink message from the port.
     /// </summary>

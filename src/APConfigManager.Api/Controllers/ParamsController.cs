@@ -88,5 +88,37 @@ namespace APConfigManager.Api.Controllers
                     : "Device did not confirm parameter reset",
             });
         }
+
+        /// <summary>
+        /// GET /api/sessions/{id}/params/{name} — reads one parameter's current value.
+        /// </summary>
+        [HttpGet("{name}")]
+        public async Task<ActionResult<ParameterResponse>> GetOne(Guid sessionId, string name, CancellationToken ct)
+        {
+            var parameter = await paramService.ReadParameterAsync(sessionId, name, ct);
+            if (parameter is null)
+                return NotFound($"Parameter '{name}' not found");
+
+            return Ok(new ParameterResponse { Name = parameter.Name, Value = parameter.Value, ParamType = parameter.ParamType });
+        }
+
+        /// <summary>
+        /// POST /api/sessions/{id}/params/set — sets one parameter and confirms the write.
+        /// </summary>
+        [HttpPost("set")]
+        public async Task<ActionResult<OperationResultResponse>> SetParameter(
+            Guid sessionId, [FromBody] SetParameterRequest request, CancellationToken ct)
+        {
+            if (request is null || string.IsNullOrWhiteSpace(request.Name))
+                return BadRequest("Parameter name is required");
+
+            var success = await paramService.SetParameterAsync(sessionId, request.Name, request.Value, ct);
+
+            return Ok(new OperationResultResponse
+            {
+                Success = success,
+                Message = success ? $"{request.Name} set to {request.Value}" : $"Device did not confirm {request.Name}",
+            });
+        }
     }
 }

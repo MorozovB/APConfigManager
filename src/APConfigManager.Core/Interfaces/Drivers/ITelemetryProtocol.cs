@@ -72,5 +72,10 @@ namespace APConfigManager.Core.Interfaces.Drivers
         /// Checks if the core sensors of the device are healthy within a specified timeout.
         /// </summary>
         Task<bool> AreCoreSensorsHealthyAsync(int timeoutMs, CancellationToken ct);
+
+        /// <summary>
+        /// Reads a single parameter by name (PARAM_REQUEST_READ → PARAM_VALUE). Null if not returned.
+        /// </summary>
+        Task<Parameter?> ReadParameterAsync(string name, CancellationToken ct);
     }
 }

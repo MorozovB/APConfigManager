@@ -17,7 +17,6 @@ public class ArduPilotDriver : IAutopilotDriver
     private const int ChunkSize = ArduPilotConstants.ProgMultiMaxSize; // 64 bytes per write
     private const int HeartbeatTimeoutMs = 3000;
     private const int PortSwitchTimeoutSeconds = 20;
-    private const int WriteParamsPasses = 6;
     private Action? onDeviceDisconnected;
     private readonly Func<Guid?, List<string>>? getOccupiedPorts;
 
@@ -752,7 +751,47 @@ public class ArduPilotDriver : IAutopilotDriver
         currentMode = BootMode.Normal;
     }
 
-    public DeviceSession? GetCurrentSession() => session;
+    public DeviceSession? GetCurrentSession()
+    {
+        return session;
+    }
+
+    public async Task<Parameter?> ReadParameterAsync(string name, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        await StopTelemetryAsync();
+        EnsureConnected();
+        await EnsureModeAsync(BootMode.Normal, ct);
+
+        try
+        {
+            return await telemetry.ReadParameterAsync(name, ct);
+        }
+        finally
+        {
+            if (onAltitudeUpdate != null) StartTelemetry(onAltitudeUpdate);
+        }
+    }
+
+    public async Task<bool> SetParameterAsync(Parameter parameter, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(parameter);
+
+        await StopTelemetryAsync();
+        EnsureConnected();
+        await EnsureModeAsync(BootMode.Normal, ct);
+
+        try
+        {
+            return await telemetry.SetParamAsync(parameter, ct);
+        }
+        finally
+        {
+            if (onAltitudeUpdate != null) StartTelemetry(onAltitudeUpdate);
+        }
+    }
+
 
     /// <summary>
     /// Throws SessionException if no active session or port is closed.

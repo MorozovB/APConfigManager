@@ -94,5 +94,16 @@ namespace APConfigManager.Core.Interfaces.Drivers
         /// Retrieves the firmware git hash from the connected device.
         /// </summary>
         Task<string> GetFirmwareGitHashAsync(CancellationToken ct);
+
+        /// <summary>
+        /// Reads one parameter from the device by its name. Returns null if the parameter does not exist.
+        /// </summary>
+        Task<Parameter?> ReadParameterAsync(string name, CancellationToken ct);
+
+        /// <summary>
+        /// Setd one parameter on the device. Returns true if the operation was successful, false otherwise.
+        /// </summary>
+        Task<bool> SetParameterAsync(Parameter parameter, CancellationToken ct);
+
     }
 }
