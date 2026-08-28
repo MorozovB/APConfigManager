@@ -1,3 +1,4 @@
 export interface AppSettings {
-  language: string;
+    language: string;
+    theme?: string;
 }

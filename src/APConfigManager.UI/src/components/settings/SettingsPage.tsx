@@ -1,104 +1,108 @@
 import { useState } from 'react';
 import {
-  Text,
-  Dropdown,
-  Option,
-  Switch,
-  Button,
-  Card,
-  Field,
+    Text,
+    Dropdown,
+    Option,
+    Switch,
+    Button,
+    Card,
+    Field,
 } from '@fluentui/react-components';
 import { SaveRegular } from '@fluentui/react-icons';
+import { useTranslation } from 'react-i18next';
 import { useSettings } from '../../hooks/useSettings.ts';
+import { useThemeMode } from '../../contexts/ThemeModeContext';
 
 const languages = [
-  { code: 'UA', label: 'Українська' },
-  { code: 'EN', label: 'English' },
-  { code: 'RU', label: 'Русский' },
+    { code: 'EN', label: 'English' },
+    { code: 'CZ', label: 'Čeština' },
+    { code: 'UA', label: 'Українська' },
 ];
 
 export const SettingsPage = () => {
-  const { settings, loading, error, save } = useSettings();
+    const { t, i18n } = useTranslation();
+    const { settings, loading, error, save } = useSettings();
+    const { mode, setMode } = useThemeMode();
 
-  const [language, setLanguage] = useState(settings?.language || 'UA');
-  const [darkMode, setDarkMode] = useState(true);
-  const [saved, setSaved] = useState(false);
+    // язык из настроек + перекрытие выбором (без setState в эффекте)
+    const [languageOverride, setLanguageOverride] = useState<string | null>(null);
+    const language = languageOverride ?? settings?.language ?? 'UA';
 
-  const handleSave = async () => {
-    await save({ language });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
-  };
+    const [saved, setSaved] = useState(false);
 
-  if (loading) {
-    return (
-      <Text size={200} style={{ color: 'var(--colorNeutralForeground3)' }}>
-        Loading settings...
-      </Text>
-    );
-  }
+    const handleLanguageSelect = (code: string) => {
+        setLanguageOverride(code);
+        i18n.changeLanguage(code);          // применить сразу, не дожидаясь Save
+    };
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '500px' }}>
+    const handleSave = async () => {
+        await save({ language, theme: mode });
+        setSaved(true);
+        setTimeout(() => setSaved(false), 3000);
+    };
 
-      <Text size={500} weight="semibold">Settings</Text>
-
-      {error && (
-        <Text size={200} style={{ color: '#ff7675' }}>{error}</Text>
-      )}
-
-      <Card style={{
-        padding: '20px',
-        backgroundColor: 'var(--colorNeutralBackground2)',
-        border: '1px solid var(--colorNeutralStroke1)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '20px',
-      }}>
-
-        <Field label="Language">
-          <Dropdown
-            value={languages.find(l => l.code === language)?.label || ''}
-            selectedOptions={[language]}
-            onOptionSelect={(_e, data) => {
-              if (data.optionValue) setLanguage(data.optionValue);
-            }}
-          >
-            {languages.map((lang) => (
-              <Option key={lang.code} value={lang.code} text={lang.label}>
-                {lang.label}
-              </Option>
-            ))}
-          </Dropdown>
-        </Field>
-
-        <Field label="Theme">
-          <Switch
-            checked={darkMode}
-            onChange={(_e, data) => setDarkMode(data.checked)}
-            label={darkMode ? 'Dark' : 'Light'}
-          />
-          <Text size={200} style={{ color: 'var(--colorNeutralForeground3)', marginTop: '4px' }}>
-            Theme switching will be available after desktop integration (Stage 7)
-          </Text>
-        </Field>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Button
-            appearance="primary"
-            icon={<SaveRegular />}
-            onClick={handleSave}
-          >
-            Save Settings
-          </Button>
-
-          {saved && (
-            <Text size={200} style={{ color: '#00b894' }}>
-              Settings saved!
+    if (loading) {
+        return (
+            <Text size={200} style={{ color: 'var(--colorNeutralForeground3)' }}>
+                {t('settings.loading')}
             </Text>
-          )}
+        );
+    }
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '500px' }}>
+
+            <Text size={500} weight="semibold">{t('settings.title')}</Text>
+
+            {error && (
+                <Text size={200} style={{ color: '#ff7675' }}>{error}</Text>
+            )}
+
+            <Card style={{
+                padding: '20px',
+                backgroundColor: 'var(--colorNeutralBackground2)',
+                border: '1px solid var(--colorNeutralStroke1)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '20px',
+            }}>
+
+                <Field label={t('settings.language')}>
+                    <Dropdown
+                        value={languages.find(l => l.code === language)?.label || ''}
+                        selectedOptions={[language]}
+                        onOptionSelect={(_e, data) => {
+                            if (data.optionValue) handleLanguageSelect(data.optionValue);
+                        }}
+                    >
+                        {languages.map((lang) => (
+                            <Option key={lang.code} value={lang.code} text={lang.label}>
+                                {lang.label}
+                            </Option>
+                        ))}
+                    </Dropdown>
+                </Field>
+
+                <Field label={t('settings.theme')}>
+                    <Switch
+                        checked={mode === 'dark'}
+                        onChange={(_e, data) => setMode(data.checked ? 'dark' : 'light')}
+                        label={mode === 'dark' ? t('settings.dark') : t('settings.light')}
+                    />
+                </Field>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <Button appearance="primary" icon={<SaveRegular />} onClick={handleSave}>
+                        {t('settings.save')}
+                    </Button>
+
+                    {saved && (
+                        <Text size={200} style={{ color: '#00b894' }}>
+                            {t('settings.saved')}
+                        </Text>
+                    )}
+                </div>
+            </Card>
         </div>
-      </Card>
-    </div>
-  );
+    );
 };

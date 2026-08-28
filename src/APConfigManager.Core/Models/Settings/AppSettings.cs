@@ -7,5 +7,6 @@ namespace APConfigManager.Core.Models.Settings
     {
         public Guid Id { get; set; } = Guid.NewGuid();
         public string Language { get; set; } = "UA";
+        public string Theme { get; set; } = "dark";
     }
 }

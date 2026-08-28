@@ -1,4 +1,4 @@
-import { createDarkTheme, BrandVariants } from '@fluentui/react-components';
+import { createDarkTheme, createLightTheme, BrandVariants } from '@fluentui/react-components';
 
 const brandColors: BrandVariants = {
   10: '#001F2E',
@@ -19,7 +19,6 @@ const brandColors: BrandVariants = {
   160: '#DEF8FF',
 };
 
-// Тёмная тема (основная, как на макете)
-export const darkTheme = {
-  ...createDarkTheme(brandColors),
-};
+export const darkTheme = { ...createDarkTheme(brandColors) };
+export const lightTheme = { ...createLightTheme(brandColors) };
+
