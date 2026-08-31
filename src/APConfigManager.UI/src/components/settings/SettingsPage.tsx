@@ -24,15 +24,15 @@ export const SettingsPage = () => {
     const { settings, loading, error, save } = useSettings();
     const { mode, setMode } = useThemeMode();
 
-    // язык из настроек + перекрытие выбором (без setState в эффекте)
     const [languageOverride, setLanguageOverride] = useState<string | null>(null);
     const language = languageOverride ?? settings?.language ?? 'UA';
 
     const [saved, setSaved] = useState(false);
 
-    const handleLanguageSelect = (code: string) => {
+    const handleLanguageSelect = async (code: string) => {
         setLanguageOverride(code);
-        i18n.changeLanguage(code);          // применить сразу, не дожидаясь Save
+        localStorage.setItem('lang', code);
+        await i18n.changeLanguage(code);
     };
 
     const handleSave = async () => {
@@ -72,7 +72,7 @@ export const SettingsPage = () => {
                         value={languages.find(l => l.code === language)?.label || ''}
                         selectedOptions={[language]}
                         onOptionSelect={(_e, data) => {
-                            if (data.optionValue) handleLanguageSelect(data.optionValue);
+                            if (data.optionValue) handleLanguageSelect(data.optionValue);   // ← НЕ setLanguageOverride
                         }}
                     >
                         {languages.map((lang) => (

@@ -1,5 +1,5 @@
 import { FluentProvider, TabList, Tab, SelectTabEvent, SelectTabData } from '@fluentui/react-components';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { darkTheme, lightTheme } from './styles/theme';
 import { ThemeModeContext, type ThemeMode } from './contexts/ThemeModeContext';
@@ -19,6 +19,7 @@ function App() {
     const { settings } = useSettings();
     const { t, i18n } = useTranslation();
 
+    // тема
     const [themeOverride, setThemeOverride] = useState<ThemeMode | null>(null);
     const themeMode: ThemeMode = themeOverride ?? (settings?.theme === 'light' ? 'light' : 'dark');
     const themeCtx = useMemo(
@@ -26,9 +27,23 @@ function App() {
         [themeMode],
     );
 
+    const langInitialized = useRef(false);
+
     useEffect(() => {
-        if (settings?.language) i18n.changeLanguage(settings.language);
+        if (!langInitialized.current && settings?.language) {
+            langInitialized.current = true;
+            localStorage.setItem('lang', settings.language);
+            void i18n.changeLanguage(settings.language);
+        }
     }, [settings?.language, i18n]);
+
+    const [, bump] = useState(0);
+
+    useEffect(() => {
+        const onChanged = () => bump((x) => x + 1);
+        i18n.on('languageChanged', onChanged);
+        return () => { i18n.off('languageChanged', onChanged); };
+    }, [i18n]);
 
     const handleTabSelect = (_event: SelectTabEvent, data: SelectTabData) => {
         const tab = data.value as TabId;

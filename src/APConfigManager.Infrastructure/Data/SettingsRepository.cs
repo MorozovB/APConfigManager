@@ -41,7 +41,13 @@ namespace APConfigManager.Infrastructure.Data
         /// </summary>
         public void SaveSettings(AppSettings settings)
         {
-            context.Settings.Update(settings);
+            var existing = context.Settings.FindAll().FirstOrDefault();
+            if (existing is not null)
+            {
+                settings.Id = existing.Id;
+            }
+
+            context.Settings.Upsert(settings);
         }
     }
 }

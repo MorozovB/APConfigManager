@@ -51,7 +51,7 @@ const resources = {
 
 i18n.use(initReactI18next).init({
     resources,
-    lng: 'UA',
+    lng: localStorage.getItem('lang') ?? 'UA',
     fallbackLng: 'EN',
     interpolation: { escapeValue: false },
 });
