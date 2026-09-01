@@ -12,6 +12,7 @@ import {
     PlugConnectedRegular,
     PlugDisconnectedRegular,
     TextBulletListLtrRegular,
+    DismissRegular,
 } from '@fluentui/react-icons';
 
 import { usePorts } from '../../hooks/usePorts';
@@ -32,10 +33,12 @@ import { AltitudeDisplay } from '../device/AltitudeDisplay';
 
 interface Props {
     index: number;
+    total: number;
+    onClose: () => void;
 }
 
-export const SessionSection = ({ index }: Props) => {
-    const [enabled, setEnabled] = useState(index === 0);
+export const SessionSection = ({ index, total, onClose }: Props) => {
+    // const [enabled, setEnabled] = useState(index === 0);
     const [selectedPort, setSelectedPort] = useState('');
     const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
     const [showLogs, setShowLogs] = useState(false);
@@ -138,6 +141,14 @@ export const SessionSection = ({ index }: Props) => {
         addLog('Disconnected', 'info');
     }, [session, orchestrator, addLog]);
 
+    const handleClose = useCallback(async () => {
+        if (session.isConnected) {
+            orchestrator.reset();
+            await session.disconnect();
+        }
+        onClose();
+    }, [session, orchestrator, onClose]);
+
     const handlePlay = useCallback(async () => {
         if (!session.sessionId) {
             addLog('Not connected', 'warn');
@@ -203,34 +214,34 @@ export const SessionSection = ({ index }: Props) => {
         }
     }, [session.sessionId, armingValue, addLog]);
 
-    if (!enabled) {
-        return (
-            <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                padding: '12px 16px',
-                backgroundColor: 'var(--colorNeutralBackground2)',
-                borderRadius: '8px',
-                border: '1px solid var(--colorNeutralStroke1)',
-            }}>
-                <Switch
-                    checked={enabled}
-                    onChange={(_e, data) => setEnabled(data.checked)}
-                    disabled={session.isConnected}
-                />
-                <PortSelector
-                    ports={ports}
-                    selectedPort={selectedPort}
-                    onSelect={setSelectedPort}
-                    disabled={false}
-                />
-                <Text size={200} style={{ color: 'var(--colorNeutralForeground3)' }}>
-                    Session {index + 1}
-                </Text>
-            </div>
-        );
-    }
+    // if (!enabled) {
+    //     return (
+    //         <div style={{
+    //             display: 'flex',
+    //             alignItems: 'center',
+    //             gap: '12px',
+    //             padding: '12px 16px',
+    //             backgroundColor: 'var(--colorNeutralBackground2)',
+    //             borderRadius: '8px',
+    //             border: '1px solid var(--colorNeutralStroke1)',
+    //         }}>
+    //             <Switch
+    //                 checked={enabled}
+    //                 onChange={(_e, data) => setEnabled(data.checked)}
+    //                 disabled={session.isConnected}
+    //             />
+    //             <PortSelector
+    //                 ports={ports}
+    //                 selectedPort={selectedPort}
+    //                 onSelect={setSelectedPort}
+    //                 disabled={false}
+    //             />
+    //             <Text size={200} style={{ color: 'var(--colorNeutralForeground3)' }}>
+    //                 Session {index + 1}
+    //             </Text>
+    //         </div>
+    //     );
+    // }
 
     const isBusy = orchestrator.isRunning || session.connecting || loadingProfileFiles;
     const showCompletedResults = (orchestrator.stage === 'done' || orchestrator.stage === 'error')
@@ -244,21 +255,22 @@ export const SessionSection = ({ index }: Props) => {
             border: `1px solid ${session.isConnected ? 'var(--colorBrandStroke1)' : 'var(--colorNeutralStroke1)'}`,
             display: 'flex',
             gap: '12px',
-            maxHeight: 'calc((100vh - 120px) / 4)',
+            maxHeight: `calc((100vh - 120px) / ${total})`,
             overflow: 'hidden',
         }}>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flexShrink: 0 }}>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                    <Switch
-                        checked={enabled}
-                        onChange={(_e, data) => {
-                            if (session.isConnected) return;
-                            setEnabled(data.checked);
-                        }}
-                        disabled={session.isConnected || isBusy}
+                    <Button
+                        appearance="subtle"
+                        icon={<DismissRegular />}
+                        onClick={handleClose}
+                        disabled={isBusy}
+                        title="Close session"
+                        style={{ color: '#d63031' }}
                     />
+                    <Text size={200} weight="semibold">Session {index + 1}</Text>
                     <PortSelector
                         ports={ports}
                         selectedPort={selectedPort}
