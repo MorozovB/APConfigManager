@@ -34,10 +34,12 @@ import { AltitudeDisplay } from '../device/AltitudeDisplay';
 interface Props {
     index: number;
     total: number;
+    slotId: number;
     onClose: () => void;
+    onRunningChange: (id: number, running: boolean) => void;
 }
 
-export const SessionSection = ({ index, total, onClose }: Props) => {
+export const SessionSection = ({ index, total, slotId, onClose, onRunningChange }: Props) => {
     // const [enabled, setEnabled] = useState(index === 0);
     const [selectedPort, setSelectedPort] = useState('');
     const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
@@ -119,6 +121,10 @@ export const SessionSection = ({ index, total, onClose }: Props) => {
         })();
         return () => { cancelled = true; };
     }, [session.sessionId, session.data]);
+
+    useEffect(() => {
+        onRunningChange(slotId, orchestrator.isRunning);
+    }, [slotId, orchestrator.isRunning, onRunningChange]);
 
     const handleConnect = useCallback(async () => {
         if (!selectedPort) {

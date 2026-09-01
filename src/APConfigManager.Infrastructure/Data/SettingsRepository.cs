@@ -1,54 +1,44 @@
 using APConfigManager.Core.Data;
 using APConfigManager.Core.Models.Settings;
+using APConfigManager.Infrastructure.Data;
 
-namespace APConfigManager.Infrastructure.Data
+public class SettingsRepository : ISettingsRepository
 {
-    /// <summary>
-    /// Stores and retrieves application settings from LiteDB (single document).
-    /// </summary>
-    public class SettingsRepository : ISettingsRepository
+    public readonly LiteDbContext context;
+    private static readonly object _gate = new();
+
+    public SettingsRepository(LiteDbContext context)
     {
-        public readonly LiteDbContext context;
+        this.context = context;
+    }
 
-        public SettingsRepository(LiteDbContext context)
+    public AppSettings GetSettings()
+    {
+        lock (_gate)
         {
-            this.context = context;
-        }
-
-        /// <summary>
-        /// Returns current settings or creates default ones if none exist.
-        /// </summary>
-        public AppSettings GetSettings()
-        {
-            var settings = context.Settings.FindAll().FirstOrDefault();
-
-            if ( settings is not null)
+            var settings = context.Settings.Query().FirstOrDefault();
+            if (settings is not null)
             {
                 return settings;
             }
 
-            settings = new AppSettings
-            {
-                Language = "UA"
-            };
-
-            context.Settings.Insert(settings);
+            settings = new AppSettings { Language = "UA" };
+            _ = context.Settings.Insert(settings);
             return settings;
         }
+    }
 
-        /// <summary>
-        /// Saves or updates the application settings.
-        /// </summary>
-        public void SaveSettings(AppSettings settings)
+    public void SaveSettings(AppSettings settings)
+    {
+        lock (_gate)
         {
-            var existing = context.Settings.FindAll().FirstOrDefault();
-
+            var existing = context.Settings.Query().FirstOrDefault();
             if (existing is not null)
             {
                 settings.Id = existing.Id;
             }
 
-            context.Settings.Upsert(settings);
+            _ = context.Settings.Upsert(settings);
         }
     }
 }

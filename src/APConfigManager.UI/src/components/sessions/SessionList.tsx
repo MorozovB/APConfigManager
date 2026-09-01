@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@fluentui/react-components';
 import { AddRegular } from '@fluentui/react-icons';
 import { SessionSection } from './SessionSection';
@@ -13,6 +13,9 @@ export const SessionList = () => {
     const nextId = useRef(0);
     const initialized = useRef(false);
 
+    const runningRef = useRef<Map<number, boolean>>(new Map());
+    const prevAnyRunning = useRef(false);
+
     useEffect(() => {
         if (!initialized.current && settings) {
             initialized.current = true;
@@ -21,12 +24,25 @@ export const SessionList = () => {
         }
     }, [settings]);
 
+    const handleRunningChange = useCallback((id: number, running: boolean) => {
+        runningRef.current.set(id, running);
+        const anyRunning = Array.from(runningRef.current.values()).some(Boolean);
+
+        if (prevAnyRunning.current && !anyRunning) {
+            console.log('[F1] all operations finished');
+            window.chrome?.webview?.postMessage({ type: 'operations-finished' });
+        }
+
+        prevAnyRunning.current = anyRunning;
+    }, []);
+
     const addSlot = () => {
         setSlots(prev => (prev.length >= MAX_SESSIONS ? prev : [...prev, nextId.current++]));
     };
 
     const closeSlot = (id: number) => {
         setSlots(prev => prev.filter(s => s !== id));
+        runningRef.current.delete(id);   // убрать состояние закрытого слота
     };
 
     return (
@@ -34,9 +50,11 @@ export const SessionList = () => {
             {slots.map((id, position) => (
                 <SessionSection
                     key={id}
+                    slotId={id}
                     index={position}
                     total={slots.length || 1}
                     onClose={() => closeSlot(id)}
+                    onRunningChange={handleRunningChange}
                 />
             ))}
 
