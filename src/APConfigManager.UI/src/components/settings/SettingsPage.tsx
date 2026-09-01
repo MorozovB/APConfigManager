@@ -27,6 +27,9 @@ export const SettingsPage = () => {
     const [languageOverride, setLanguageOverride] = useState<string | null>(null);
     const language = languageOverride ?? settings?.language ?? 'UA';
 
+    const [startupOverride, setStartupOverride] = useState<number | null>(null);
+    const startupSessions = startupOverride ?? settings?.startupSessions ?? 1;
+
     const [saved, setSaved] = useState(false);
 
     const handleLanguageSelect = async (code: string) => {
@@ -39,6 +42,7 @@ export const SettingsPage = () => {
         await save({ language, theme: mode });
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
+        await save({ language, theme: mode, startupSessions });
     };
 
     if (loading) {
@@ -89,6 +93,20 @@ export const SettingsPage = () => {
                         onChange={(_e, data) => setMode(data.checked ? 'dark' : 'light')}
                         label={mode === 'dark' ? t('settings.dark') : t('settings.light')}
                     />
+                </Field>
+
+                <Field label={t('settings.startupSessions')}>
+                    <Dropdown
+                        value={String(startupSessions)}
+                        selectedOptions={[String(startupSessions)]}
+                        onOptionSelect={(_e, data) => {
+                            if (data.optionValue) setStartupOverride(Number(data.optionValue));
+                        }}
+                    >
+                        {[1, 2, 3, 4, 5, 6, 7].map((n) => (
+                            <Option key={n} value={String(n)} text={String(n)}>{n}</Option>
+                        ))}
+                    </Dropdown>
                 </Field>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>

@@ -6,7 +6,11 @@ namespace APConfigManager.Core.Models.Settings
     public class AppSettings
     {
         public Guid Id { get; set; } = Guid.NewGuid();
+
         public string Language { get; set; } = "UA";
+
         public string Theme { get; set; } = "dark";
+
+        public int StartupSessions { get; set; } = 1;
     }
 }

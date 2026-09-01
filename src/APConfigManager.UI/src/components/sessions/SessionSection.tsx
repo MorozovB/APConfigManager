@@ -141,13 +141,10 @@ export const SessionSection = ({ index, total, onClose }: Props) => {
         addLog('Disconnected', 'info');
     }, [session, orchestrator, addLog]);
 
-    const handleClose = useCallback(async () => {
-        if (session.isConnected) {
-            orchestrator.reset();
-            await session.disconnect();
-        }
+    const handleClose = useCallback(() => {
+        if (session.isConnected) return;
         onClose();
-    }, [session, orchestrator, onClose]);
+    }, [session.isConnected, onClose]);
 
     const handlePlay = useCallback(async () => {
         if (!session.sessionId) {
@@ -214,35 +211,6 @@ export const SessionSection = ({ index, total, onClose }: Props) => {
         }
     }, [session.sessionId, armingValue, addLog]);
 
-    // if (!enabled) {
-    //     return (
-    //         <div style={{
-    //             display: 'flex',
-    //             alignItems: 'center',
-    //             gap: '12px',
-    //             padding: '12px 16px',
-    //             backgroundColor: 'var(--colorNeutralBackground2)',
-    //             borderRadius: '8px',
-    //             border: '1px solid var(--colorNeutralStroke1)',
-    //         }}>
-    //             <Switch
-    //                 checked={enabled}
-    //                 onChange={(_e, data) => setEnabled(data.checked)}
-    //                 disabled={session.isConnected}
-    //             />
-    //             <PortSelector
-    //                 ports={ports}
-    //                 selectedPort={selectedPort}
-    //                 onSelect={setSelectedPort}
-    //                 disabled={false}
-    //             />
-    //             <Text size={200} style={{ color: 'var(--colorNeutralForeground3)' }}>
-    //                 Session {index + 1}
-    //             </Text>
-    //         </div>
-    //     );
-    // }
-
     const isBusy = orchestrator.isRunning || session.connecting || loadingProfileFiles;
     const showCompletedResults = (orchestrator.stage === 'done' || orchestrator.stage === 'error')
         && orchestrator.results.length > 0;
@@ -266,9 +234,9 @@ export const SessionSection = ({ index, total, onClose }: Props) => {
                         appearance="subtle"
                         icon={<DismissRegular />}
                         onClick={handleClose}
-                        disabled={isBusy}
-                        title="Close session"
-                        style={{ color: '#d63031' }}
+                        disabled={isBusy|| session.isConnected}
+                        title={session.isConnected ? 'Disconnect before closing' : 'Close session'}
+                        style={{ color: session.isConnected ? undefined : '#d63031' }}
                     />
                     <Text size={200} weight="semibold">Session {index + 1}</Text>
                     <PortSelector

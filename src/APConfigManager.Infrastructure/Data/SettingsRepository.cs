@@ -42,6 +42,7 @@ namespace APConfigManager.Infrastructure.Data
         public void SaveSettings(AppSettings settings)
         {
             var existing = context.Settings.FindAll().FirstOrDefault();
+
             if (existing is not null)
             {
                 settings.Id = existing.Id;

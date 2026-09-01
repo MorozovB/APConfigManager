@@ -1,68 +1,60 @@
+using System.Collections.Concurrent;
+using APConfigManager.Core.Data;
 using APConfigManager.Core.Exceptions;
 using APConfigManager.Core.Interfaces.Drivers;
 using APConfigManager.Core.Interfaces.Services;
 using APConfigManager.Core.Models;
 using Microsoft.Extensions.Logging;
 
-
 namespace APConfigManager.Infrastructure.Services;
 
 /// <summary>
-/// Manages up to 4 concurrent device sessions. Tracks active connections
-/// and prevents duplicate port usage.
+/// Manages concurrent device sessions (limit configurable via settings, 1–7).
+/// Tracks active connections and prevents duplicate port usage.
 /// </summary>
 public class SessionManager : ISessionManager, IAsyncDisposable
 {
-    private const int MaxSessions = 4;
+    private const int HardMaxSessions = 7;
 
-    private readonly Dictionary<Guid, DeviceSession> sessions = new();
+    private sealed record SessionEntry(DeviceSession Session, IAutopilotDriver Driver);
 
-    private readonly Dictionary<Guid, IAutopilotDriver> drivers = new();
-    private readonly object _stateLock = new();
+    private readonly ConcurrentDictionary<Guid, SessionEntry> sessions = new();
     private readonly SemaphoreSlim _lock = new(1, 1);
     private readonly Func<IAutopilotDriver> driverFactory;
     private readonly ILogger<SessionManager> logger;
 
     private bool _disposed = false;
 
-    /// <summary>
-    /// Initializes the session manager with a driver factory.
-    /// The factory will be replaced with proper DI registration in Flasher.Api.
-    /// </summary>  
-    public SessionManager(ILogger<SessionManager> logger, Func<IAutopilotDriver> driverFactory)
+    public SessionManager(
+        ILogger<SessionManager> logger,
+        Func<IAutopilotDriver> driverFactory)
     {
-        this.driverFactory = driverFactory;
         this.logger = logger;
+        this.driverFactory = driverFactory;
     }
 
-    /// <summary>
-    /// Creates a new session on the specified port.
-    /// Throws SessionException if port is already in use or session limit reached.
-    /// Connects to the device and adds the session to the active list.
-    /// </summary>
+    private static int GetMaxSessions() => HardMaxSessions;
+
     public async Task<DeviceSession> CreateSessionAsync(string port, int baudRate, CancellationToken ct)
     {
         await _lock.WaitAsync(ct);
         try
         {
-            lock (_stateLock)
+            var maxSessions = GetMaxSessions();
+
+            if (sessions.Count >= maxSessions)
             {
-                if (sessions.Count >= MaxSessions)
-                {
-                    logger.LogWarning("Session limit reached ({Max})", MaxSessions);
+                logger.LogWarning("Session limit reached ({Max})", maxSessions);
+                throw new SessionLimitReachedException($"Maximum of {maxSessions} concurrent sessions reached.");
+            }
 
-                    throw new SessionLimitReachedException($"Maximum of {MaxSessions} concurrent sessions reached.");
-                }
+            var portInUse = sessions.Values.Any(e =>
+                e.Session.Port.Equals(port, StringComparison.OrdinalIgnoreCase));
 
-                var portInUse = sessions.Values.Any(s =>
-                    s.Port.Equals(port, StringComparison.OrdinalIgnoreCase));
-
-                if (portInUse)
-                {
-                    logger.LogWarning("Port {Port} already in use", port);
-
-                    throw new PortInUseException($"Port {port} is already in use by another session.");
-                }
+            if (portInUse)
+            {
+                logger.LogWarning("Port {Port} already in use", port);
+                throw new PortInUseException($"Port {port} is already in use by another session.");
             }
 
             var driver = this.driverFactory();
@@ -74,24 +66,13 @@ public class SessionManager : ISessionManager, IAsyncDisposable
             catch (Exception ex)
             {
                 logger.LogWarning(ex, "Connect failed on {Port}, releasing driver", port);
-
-                try {
-                    await driver.DisconnectAsync();
-                }
-                catch
-                {
-                }
+                try { await driver.DisconnectAsync(); } catch { }
                 throw;
             }
 
-            lock (_stateLock)
-            {
-                sessions[session.Id] = session;
-                drivers[session.Id] = driver;
-            }
+            sessions[session.Id] = new SessionEntry(session, driver);
 
             logger.LogInformation("Session {Id} opened on {Port}", session.Id, port);
-
             return session;
         }
         finally
@@ -100,64 +81,33 @@ public class SessionManager : ISessionManager, IAsyncDisposable
         }
     }
 
-    /// <summary>
-    /// Returns a session by its ID or null if not found.
-    /// </summary>
     public DeviceSession? GetSession(Guid sessionId)
-    {
-        lock (_stateLock)
-        {
-            sessions.TryGetValue(sessionId, out var session);
+        => sessions.TryGetValue(sessionId, out var entry) ? entry.Session : null;
 
-            return session;
-        }
-    }
-
-    /// <summary>
-    /// Returns all active sessions.
-    /// </summary>
     public List<DeviceSession> GetAllSessions()
-    {
-        lock (_stateLock)
-        {
-            return sessions.Values.ToList();
-        }
-    }
+        => sessions.Values.Select(e => e.Session).ToList();
 
-    /// <summary>
-    /// Closes a session, disconnects the driver, and frees the port.
-    /// Throws SessionException if session not found.
-    /// </summary>
     public async Task CloseSessionAsync(Guid sessionId)
     {
         await _lock.WaitAsync();
         try
         {
-            IAutopilotDriver? driver;
-            lock (_stateLock)
+            if (!sessions.TryGetValue(sessionId, out var entry))
             {
-                if (!drivers.TryGetValue(sessionId, out driver))
-                {
-                    logger.LogWarning("Session {Id} not found", sessionId);
-
-                    throw new SessionNotFoundException($"Session {sessionId} not found.");
-                }
+                logger.LogWarning("Session {Id} not found", sessionId);
+                throw new SessionNotFoundException($"Session {sessionId} not found.");
             }
 
             try
             {
-                await driver.DisconnectAsync();
+                await entry.Driver.DisconnectAsync();
             }
             finally
             {
-                lock (_stateLock) {
-                    _ = drivers.Remove(sessionId);
-                    _ = sessions.Remove(sessionId);
-                }
+                _ = sessions.TryRemove(sessionId, out _);
             }
 
             logger.LogInformation("Session {Id} closed", sessionId);
-
         }
         finally
         {
@@ -165,124 +115,67 @@ public class SessionManager : ISessionManager, IAsyncDisposable
         }
     }
 
-    /// <summary>
-    /// Returns the autopilot driver for the specified session.
-    /// Throws SessionException if session not found.
-    /// </summary>
     public IAutopilotDriver GetDriver(Guid sessionId)
     {
-        lock (_stateLock)
+        if (!sessions.TryGetValue(sessionId, out var entry))
         {
-            if (!drivers.TryGetValue(sessionId, out var driver))
-            {
-                logger.LogWarning("Session {Id} not found", sessionId);
-
-                throw new SessionNotFoundException($"Session {sessionId} not found.");
-            }
-
-            return driver;
+            logger.LogWarning("Session {Id} not found", sessionId);
+            throw new SessionNotFoundException($"Session {sessionId} not found.");
         }
+
+        return entry.Driver;
     }
 
-    /// <summary>
-    /// Sets a telemetry callback for the specified session.
-    /// The callback will be invoked with altitude updates.
-    /// </summary>
     public void SetTelemetryCallback(Guid sessionId, Action<float> onAltitude)
     {
-        IAutopilotDriver? driver;
-        lock (_stateLock)
+        if (sessions.TryGetValue(sessionId, out var entry))
         {
-            drivers.TryGetValue(sessionId, out driver);
+            entry.Driver.StartTelemetry(onAltitude);
         }
-
-        driver?.StartTelemetry(onAltitude);
     }
 
-    /// <summary>
-    /// Session manager can sync the session state from the driver if needed.
-    /// </summary>
     public void SyncSessionFromDriver(Guid sessionId)
     {
-        IAutopilotDriver? driver;
-        lock (_stateLock)
-        {
-            if (!drivers.TryGetValue(sessionId, out driver))
-            {
-                return;
-            }
-
-            var current = driver.GetCurrentSession();
-
-            if (current is not null)
-            {
-                sessions[sessionId] = current;
-            }
-        }
-
-    }
-
-    /// <summary>
-    /// Gets a list of occupied ports, optionally excluding a specific session ID.
-    /// </summary>
-    public List<string> GetOccupiedPorts(Guid? excludeSessionId = null)
-    {
-        lock (_stateLock)
-        {
-            return sessions.Values
-                .Where(s => excludeSessionId == null || s.Id != excludeSessionId)
-                .Select(s => s.Port)
-                .ToList();
-        }
-    }
-
-    /// <summary>
-    /// Stops the telemetry loop for the session
-    /// </summary>
-    public async Task StopTelemetryAsync(Guid sessionId)
-    {
-        IAutopilotDriver? driver;
-
-        lock (_stateLock)
-        {
-            _ = drivers.TryGetValue(sessionId, out driver);
-        }
-
-        if (driver is not null)
-        {
-            await driver.StopTelemetryAsync();
-        }
-    }
-
-    /// <summary>
-    /// Closes all active sessions and releases resources.
-    /// </summary>
-    public async ValueTask DisposeAsync()
-    {
-        if (_disposed)
+        if (!sessions.TryGetValue(sessionId, out var entry))
         {
             return;
         }
 
+        var current = entry.Driver.GetCurrentSession();
+        if (current is not null)
+        {
+            // обновляем только если запись не удалили/не подменили — без «воскрешения» закрытой сессии
+            _ = sessions.TryUpdate(sessionId, entry with { Session = current }, entry);
+        }
+    }
+
+    public List<string> GetOccupiedPorts(Guid? excludeSessionId = null)
+        => sessions.Values
+            .Where(e => excludeSessionId == null || e.Session.Id != excludeSessionId)
+            .Select(e => e.Session.Port)
+            .ToList();
+
+    public async Task StopTelemetryAsync(Guid sessionId)
+    {
+        if (sessions.TryGetValue(sessionId, out var entry))
+        {
+            await entry.Driver.StopTelemetryAsync();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed) return;
         _disposed = true;
 
         await _lock.WaitAsync();
-
         try
         {
-            foreach (var driver in drivers.Values)
+            foreach (var entry in sessions.Values)
             {
-                try
-                {
-                    await driver.DisconnectAsync();
-                }
-                catch (Exception ex)
-                {
-                    logger.LogDebug(ex, "Error disconnecting driver during dispose");
-                }
+                try { await entry.Driver.DisconnectAsync(); }
+                catch (Exception ex) { logger.LogDebug(ex, "Error disconnecting driver during dispose"); }
             }
-
-            drivers.Clear();
             sessions.Clear();
         }
         finally
