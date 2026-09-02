@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8" ?>
 <Window
     x:Class="APConfigManager.Desktop.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -9,14 +9,19 @@
         <WebView2 x:Name="WebView" />
 
         <Grid x:Name="LoadingOverlay" Background="#1a1a2e">
-            <StackPanel VerticalAlignment="Center"
-                        HorizontalAlignment="Center"
-                        Spacing="16">
-                <ProgressRing IsActive="True" Width="48" Height="48" />
-                <TextBlock Text="Loading AP Configuration Manager..."
-                           Foreground="White"
-                           FontSize="16"
-                           HorizontalAlignment="Center" />
+            <StackPanel
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Spacing="16">
+                <ProgressRing
+                    Width="48"
+                    Height="48"
+                    IsActive="True" />
+                <TextBlock
+                    HorizontalAlignment="Center"
+                    FontSize="16"
+                    Foreground="White"
+                    Text="Loading AP Configuration Manager..." />
             </StackPanel>
         </Grid>
     </Grid>

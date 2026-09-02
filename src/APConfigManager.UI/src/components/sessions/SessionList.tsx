@@ -3,6 +3,7 @@ import { Button } from '@fluentui/react-components';
 import { AddRegular } from '@fluentui/react-icons';
 import { SessionSection } from './SessionSection';
 import { useSettings } from '../../hooks/useSettings';
+import { notifyOperationsFinished } from '../../platform/host';
 
 const MAX_SESSIONS = 7;
 
@@ -29,8 +30,7 @@ export const SessionList = () => {
         const anyRunning = Array.from(runningRef.current.values()).some(Boolean);
 
         if (prevAnyRunning.current && !anyRunning) {
-            console.log('[F1] all operations finished');
-            window.chrome?.webview?.postMessage({ type: 'operations-finished' });
+            notifyOperationsFinished();
         }
 
         prevAnyRunning.current = anyRunning;
