@@ -1,0 +1,43 @@
+# ══════════════════════════════════════════════════════════════
+#  Line-ending normalization (cross-platform: Windows + Fedora)
+#  Repo blobs are ALWAYS stored as LF. Working-copy endings are
+#  decided per rule below. This kills CRLF/LF diff churn between OSes.
+# ══════════════════════════════════════════════════════════════
+
+# Default: treat as text, normalize to LF in repo, check out LF everywhere.
+* text=auto eol=lf
+
+# ── Windows-only tooling: must stay CRLF in the working copy ──
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+*.ps1   text eol=crlf
+*.sln   text eol=crlf
+
+# ── Unix scripts: must stay LF or they won't run on Linux ──
+*.sh    text eol=lf
+
+# ── Binary: never normalize, never diff as text ──
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.ico   binary
+*.icns  binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.eot   binary
+*.otf   binary
+*.snk   binary
+*.pfx   binary
+*.dll   binary
+*.exe   binary
+*.pdb   binary
+*.zip   binary
+*.gz    binary
+*.7z    binary
+*.db    binary
+*.bin   binary
+*.node  binary
+*.apj   binary

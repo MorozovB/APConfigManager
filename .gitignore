@@ -100,9 +100,10 @@ BundleArtifacts/
 # ══════════════════════════════════════
 # Node.js (Flasher.UI — React frontend)
 # ══════════════════════════════════════
-src/Flasher.UI/node_modules/
-src/Flasher.UI/dist/
-src/Flasher.UI/.vite/
+**/node_modules/
+**/dist/
+**/.vite/
+**/.cache/
 
 ## npm
 npm-debug.log*
@@ -134,3 +135,30 @@ ehthumbs.db
 Desktop.ini
 /tests/APConfigManager.Infrastructure.Tests/TestData
 /build
+
+# ══════════════════════════════════════
+# Electron (Stage 3 shell — added ahead of migration)
+# ══════════════════════════════════════
+out/
+release/
+dist-electron/
+.electron-builder-cache/
+
+# Packaged installers / update artifacts.
+# Built in CI and attached to GitHub Releases — NEVER committed.
+*.AppImage
+*.deb
+*.rpm
+*.snap
+*.dmg
+*.msi
+*.exe
+*.blockmap
+
+# ══════════════════════════════════════
+# VS Code (share only curated files; ignore the rest)
+# ══════════════════════════════════════
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/extensions.json
