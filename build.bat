@@ -42,9 +42,23 @@ dotnet publish src\APConfigManager.Api\APConfigManager.Api.csproj -c %CONFIG% -r
 echo [4/6] Copying React UI into API...
 xcopy /E /Y /Q build\wwwroot\* build\publish\api\wwwroot\ || goto :error
 
-:: [5/6] Publish Desktop shell
-echo [5/6] Publishing Desktop...
-dotnet publish src\APConfigManager.Desktop\APConfigManager.Desktop\APConfigManager.Desktop.csproj -c %CONFIG% -r %RID% --self-contained true -p:Platform=x64 -p:WindowsPackageType=None -o build\publish\desktop || goto :error
+:: [5/6] Build Desktop with full MSBuild (unpackaged WinUI generates <AppName>.pri, not resources.pri)
+echo [5/6] Building Desktop...
+set "TFM=net8.0-windows10.0.19041.0"
+set "DESKTOP_OUT=src\APConfigManager.Desktop\APConfigManager.Desktop\bin\x64\%CONFIG%\%TFM%"
+if exist "%DESKTOP_OUT%" rd /s /q "%DESKTOP_OUT%"
+
+set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
+if not exist "%VSWHERE%" ( echo ERROR: vswhere.exe not found - install VS 2022 or Build Tools. & goto :error )
+set "MSBUILD="
+for /f "usebackq delims=" %%i in (`"%VSWHERE%" -latest -products * -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe`) do set "MSBUILD=%%i"
+if not defined MSBUILD ( echo ERROR: MSBuild.exe not found via vswhere. & goto :error )
+
+"%MSBUILD%" src\APConfigManager.Desktop\APConfigManager.Desktop\APConfigManager.Desktop.csproj /t:Restore;Build /p:Configuration=%CONFIG% /p:Platform=x64 /p:WindowsPackageType=None /v:minimal /nologo || goto :error
+
+if not exist "%DESKTOP_OUT%\APConfigManager.Desktop.exe" ( echo ERROR: no exe at %DESKTOP_OUT% & goto :error )
+dir /b "%DESKTOP_OUT%\*.pri" >nul 2>&1 || ( echo ERROR: no .pri generated in %DESKTOP_OUT% ^(check EnableMsixTooling^). & goto :error )
+xcopy /E /Y /Q "%DESKTOP_OUT%\*" build\publish\desktop\ || goto :error
 
 :: [6/6] Build installer
 echo [6/6] Building installer...
