@@ -89,6 +89,17 @@ async function resolveUrl() {
   return API_URL;
 }
 
+const { app, BrowserWindow, ipcMain } = require('electron');
+
+ipcMain.on('operations-finished', () => {
+  if (!mainWindow) return;
+  if (mainWindow.isFocused()) return;
+  mainWindow.flashFrame(true);
+
+app.on('browser-window-focus', () => {
+  if (mainWindow) mainWindow.flashFrame(false);
+});
+
 // ---------------------------------------------------------------------------
 // Window
 // ---------------------------------------------------------------------------
@@ -102,6 +113,7 @@ async function createWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      preload: path.join(__dirname, 'preload.js'),
     },
   });
 
