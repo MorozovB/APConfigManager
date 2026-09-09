@@ -1,4 +1,4 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
 const { spawn } = require('child_process');
 const http = require('http');
 const path = require('path');
@@ -22,13 +22,12 @@ function startApi() {
     args = ['run', '--project', 'APConfigManager.Api.csproj', '--no-launch-profile'];
   } else {
     const exeName = process.platform === 'win32'
-      ? 'APConfigManager.Api.exe' : 'APConfigManager.Api';
+      ? 'APConfigManager.Api.exe'
+      : 'APConfigManager.Api';
     cwd = path.join(process.resourcesPath, 'api');
     command = path.join(cwd, exeName);
     args = [];
   }
-
-  console.log('[shell] starting API:', command, args.join(' '), '| cwd:', cwd);
 
   apiProcess = spawn(command, args, {
     cwd,
@@ -43,7 +42,7 @@ function startApi() {
 
   apiProcess.on('error', (err) => console.error('[shell] API spawn error:', err));
   apiProcess.on('exit', (code, signal) => {
-    console.error('[shell] API exited. code=', code, 'signal=', signal);
+    if (code) console.error('[shell] API exited. code=', code, 'signal=', signal);
     apiProcess = null;
   });
 }
@@ -56,7 +55,7 @@ function stopApi() {
     if (process.platform === 'win32') {
       spawn('taskkill', ['/pid', String(pid), '/t', '/f']);
     } else {
-      process.kill(-pid, 'SIGTERM'); // negative pid = kill the process group
+      process.kill(-pid, 'SIGTERM');
     }
   } catch {
     /* already gone */
@@ -64,7 +63,7 @@ function stopApi() {
 }
 
 // ---------------------------------------------------------------------------
-// URL resolution: Vite (hot reload) wins in dev; otherwise the API-served SPA
+// URL resolution
 // ---------------------------------------------------------------------------
 function ping(url) {
   return new Promise((resolve) => {
@@ -84,17 +83,18 @@ async function waitForApi(timeoutMs = 60000) {
 }
 
 async function resolveUrl() {
-  // Vite (hot reload) wins for the UI shell; otherwise the API-served SPA.
   if (await ping(VITE_URL)) return VITE_URL;
   return API_URL;
 }
 
-const { app, BrowserWindow, ipcMain } = require('electron');
-
+// ---------------------------------------------------------------------------
+// Block F: background-completion notification
+// ---------------------------------------------------------------------------
 ipcMain.on('operations-finished', () => {
   if (!mainWindow) return;
   if (mainWindow.isFocused()) return;
   mainWindow.flashFrame(true);
+});
 
 app.on('browser-window-focus', () => {
   if (mainWindow) mainWindow.flashFrame(false);

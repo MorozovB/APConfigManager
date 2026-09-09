@@ -52,7 +52,16 @@ builder.Services.AddSingleton<ISettingsRepository, SettingsRepository>();
 builder.Services.AddSingleton<IDeviceProfileRepository, DeviceProfileRepository>();
 
 // ─── Transport ──────────────────────────────────
-builder.Services.AddSingleton<IPortScanner, PortScanner>();
+if (OperatingSystem.IsWindows())
+{
+#if WINDOWS
+    builder.Services.AddSingleton<IPortScanner, WindowsPortScanner>();
+#endif
+}
+else
+{
+    builder.Services.AddSingleton<IPortScanner, LinuxPortScanner>();
+}
 
 // ─── Parsers ────────────────────────────────────
 builder.Services.AddSingleton<IFirmwareParser, ApjFirmwareParser>();
