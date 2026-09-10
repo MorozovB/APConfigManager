@@ -1,6 +1,7 @@
 using APConfigManager.Core.Interfaces.Drivers;
 using APConfigManager.Core.Interfaces.Transport;
 using APConfigManager.Core.Models;
+using APConfigManager.Infrastructure.Transport;
 using Microsoft.Extensions.Logging;
 using static MAVLink;
 
@@ -14,6 +15,8 @@ public class MavLinkProtocol : ITelemetryProtocol
     private readonly ISerialPortAdapter port;
     private readonly MavlinkParse parser;
     private readonly ILogger<MavLinkProtocol> logger;
+    private Stream? wrappedBaseStream;
+    private Stream? readStream;
 
     private const int HeartbeatPreambleDelayMs = 500;
 
@@ -595,11 +598,12 @@ public class MavLinkProtocol : ITelemetryProtocol
 
         try
         {
+            var stream = GetReadStream();
             var msg = await Task.Run(() =>
             {
                 try
                 {
-                    return parser.ReadPacket(port.BaseStream);
+                    return parser.ReadPacket(GetReadStream());
                 }
                 catch (TimeoutException)
                 {
@@ -614,6 +618,23 @@ public class MavLinkProtocol : ITelemetryProtocol
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// Returns a BlockingReadStream over the port's current BaseStream, re-wrapping
+    /// automatically whenever the port is reopened (BaseStream identity changes on
+    /// every Open — connect, reconnect-after-boot, mode switch). Keeps the wrapper
+    /// valid across all reopen paths without the driver resetting anything.
+    /// </summary>
+    private Stream GetReadStream()
+    {
+        var current = port.BaseStream;
+        if (!ReferenceEquals(current, wrappedBaseStream))
+        {
+            wrappedBaseStream = current;
+            readStream = new BlockingReadStream(current);
+        }
+        return readStream!;
     }
 
     public async Task ReadTelemetryLoopAsync(
@@ -771,7 +792,7 @@ public class MavLinkProtocol : ITelemetryProtocol
 
             await SendPacketAsync(MAVLINK_MSG_ID.PARAM_REQUEST_READ, command, ct);
 
-            // Wait up to 500 ms for this specific param 
+            // Wait up to 500 ms for this specific param
             var deadline = DateTime.UtcNow.AddMilliseconds(500);
             while (DateTime.UtcNow < deadline)
             {
