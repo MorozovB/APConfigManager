@@ -120,7 +120,10 @@ public class ParameterUploadStrategy : IParameterUploadStrategy
             port.Close();
             await context.ReconnectAfterReboot(ct);
 
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             var deviceParams = await telemetry.RequestAllParamsAsync(ct);
+            sw.Stop();
+            logger.LogInformation("RequestAllParams took {Ms} ms for {Cnt} params", sw.ElapsedMilliseconds, deviceParams.Count);
 
             if (deviceParams.Count == 0)
             {

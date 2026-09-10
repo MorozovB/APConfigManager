@@ -140,10 +140,13 @@ public class MavLinkProtocol : ITelemetryProtocol
 
     /// <summary>
     /// Requests all parameters from the autopilot via PARAM_REQUEST_LIST.
+    /// The device may answer a single request with only a partial burst and, on
+    /// a repeat, continues from where it left off (wrapping around) rather than
+    /// restarting at index 0 — so received params are accumulated across repeats
+    /// (never cleared) until param_count is reached.
     /// </summary>
     public async Task<List<Parameter>> RequestAllParamsAsync(CancellationToken ct)
     {
-        // Establish GCS presence — autopilot ignores commands without heartbeat stream
         await EstablishGcsPresenceAsync(ct);
 
         var request = new mavlink_param_request_list_t
@@ -152,7 +155,6 @@ public class MavLinkProtocol : ITelemetryProtocol
             target_component = 1
         };
 
-        // Generated once and re-sent in the retry loop (keeps the same sequence bytes on the wire).
         var packet = parser.GenerateMAVLinkPacket20(
             MAVLINK_MSG_ID.PARAM_REQUEST_LIST,
             request,
@@ -160,43 +162,30 @@ public class MavLinkProtocol : ITelemetryProtocol
             ArduPilotConstants.MavSysId,
             ArduPilotConstants.MavCompId);
 
-        var parameters = new List<Parameter>();
+        // Accumulate by index across repeats — never discard what we already have.
+        var received = new Dictionary<ushort, Parameter>();
         var totalExpected = -1;
 
-        for (var attempt = 1; attempt <= 5; attempt++)
+        var absoluteLimit = DateTime.UtcNow.AddSeconds(60);
+
+        for (var attempt = 1; attempt <= 12 && DateTime.UtcNow < absoluteLimit; attempt++)
         {
-            parameters.Clear();
-            totalExpected = -1;
-
             await port.WriteAsync(packet, 0, packet.Length, ct);
-            logger.LogDebug("RequestAllParams: attempt {Attempt}, sent PARAM_REQUEST_LIST", attempt);
+            logger.LogDebug("RequestAllParams: attempt {Attempt}, have {Got}/{Expected}", attempt, received.Count, totalExpected);
 
-            // Time-based deadline instead of consecutive-null counter.
-            // Right after boot the autopilot sends many non-PARAM_VALUE packets
-            // (heartbeat, statustext, system_time) which were incorrectly
-            // eating through the null budget and breaking the loop early.
-            var idleDeadline = DateTime.UtcNow.AddSeconds(4); // reset on each received param
-            var absoluteLimit = DateTime.UtcNow.AddSeconds(60);
+            // Read this burst until the device pauses (short idle) or list completes.
+            var idleDeadline = DateTime.UtcNow.AddSeconds(1.5);
 
-            while (DateTime.UtcNow < absoluteLimit)
+            while (DateTime.UtcNow < idleDeadline && DateTime.UtcNow < absoluteLimit)
             {
                 ct.ThrowIfCancellationRequested();
 
-                // Idle too long with no new params — device stopped sending
-                if (DateTime.UtcNow > idleDeadline)
-                {
-                    logger.LogDebug("RequestAllParams: idle timeout ({Got}/{Expected})", parameters.Count, totalExpected);
-                    break;
-                }
-
                 var msg = await ReadMessageAsync(ct);
-
                 if (msg?.data is null)
                 {
                     continue;
                 }
 
-                // Keep heartbeat stream alive during long param reads.
                 if (msg.msgid == (uint)MAVLINK_MSG_ID.HEARTBEAT)
                 {
                     await SendHeartbeatAsync(ct);
@@ -208,62 +197,41 @@ public class MavLinkProtocol : ITelemetryProtocol
                     continue;
                 }
 
-                var paramValue = (mavlink_param_value_t)msg.data;
-                var name = System.Text.Encoding.ASCII
-                    .GetString(paramValue.param_id)
-                    .TrimEnd('\0');
+                var pv = (mavlink_param_value_t)msg.data;
+                var name = System.Text.Encoding.ASCII.GetString(pv.param_id).TrimEnd('\0');
 
-                parameters.Add(new Parameter
+                received[pv.param_index] = new Parameter
                 {
                     Name = name,
-                    Value = paramValue.param_value,
-                    ParamType = paramValue.param_type
-                });
+                    Value = pv.param_value,
+                    ParamType = pv.param_type
+                };
 
-                totalExpected = paramValue.param_count;
-                idleDeadline = DateTime.UtcNow.AddSeconds(4); // reset idle window
+                totalExpected = pv.param_count;
+                idleDeadline = DateTime.UtcNow.AddSeconds(1.5); // extend while data flows
 
-                if (parameters.Count >= totalExpected)
+                if (totalExpected > 0 && received.Count >= totalExpected)
                 {
-                    logger.LogDebug("RequestAllParams: complete ({Got}/{Expected})", parameters.Count, totalExpected);
                     break;
                 }
             }
 
-            logger.LogDebug("RequestAllParams: attempt {Attempt} received {Got}/{Expected}", attempt, parameters.Count, totalExpected);
-
-            if (parameters.Count > 0 && parameters.Count >= totalExpected)
+            if (totalExpected > 0 && received.Count >= totalExpected)
             {
                 break;
             }
 
-            // Partial read — request only missing indices before next attempt.
-            if (parameters.Count > 0 && totalExpected > 0)
-            {
-                logger.LogDebug($"RequestAllParams: partial read, requesting missing...");
-                await RequestMissingParamsAsync(parameters, totalExpected, ct);
-
-                if (parameters.Count >= totalExpected)
-                {
-                    break;
-                }
-            }
-
-            await Task.Delay(2000, ct);
+            await Task.Delay(200, ct);
         }
 
-        logger.LogInformation("RequestAllParams: final {Got}/{Expected}", parameters.Count, totalExpected);
+        logger.LogInformation("RequestAllParams: final {Got}/{Expected}", received.Count, totalExpected);
 
-        if (parameters.Count < totalExpected)
+        if (totalExpected > 0 && received.Count < totalExpected)
         {
-            logger.LogWarning("Parameter read incomplete: {Got}/{Expected}", parameters.Count, totalExpected);
+            logger.LogWarning("Parameter read incomplete: {Got}/{Expected}", received.Count, totalExpected);
         }
 
-        // Remove duplicates by name, keeping the last received value.
-        return parameters
-            .GroupBy(p => p.Name)
-            .Select(g => g.Last())
-            .ToList();
+        return received.Values.ToList();
     }
 
     /// <summary>
