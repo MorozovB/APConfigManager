@@ -402,6 +402,7 @@ public class ParameterUploadStrategy : IParameterUploadStrategy
 
             // Final verification: read actual state from device
             var verifyParams = await telemetry.RequestAllParamsAsync(ct);
+
             var verifyMap = verifyParams
                 .GroupBy(p => p.Name)
                 .ToDictionary(g => g.Key, g => g.Last().Value);
@@ -426,6 +427,9 @@ public class ParameterUploadStrategy : IParameterUploadStrategy
                     realFailed++;
                 }
             }
+            logger.LogInformation(
+                "Param upload done: sent={Sent}, failed={Failed}, hidden={Hidden}, readonly={ReadOnly}, total={Total}",
+                sent, realFailed, missing.Count, skippedReadOnly + skippedAutoCalc, parameters.Count);
 
             return new ParameterUploadResult
             {

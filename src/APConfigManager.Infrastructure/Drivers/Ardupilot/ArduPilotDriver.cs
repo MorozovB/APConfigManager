@@ -273,6 +273,7 @@ public class ArduPilotDriver : IAutopilotDriver
         {
             var fwVer = await telemetry.GetFirmwareVersionAsync(ct);
 
+
             if (session is not null && !string.IsNullOrWhiteSpace(fwVer))
             {
                 session.FirmwareVersion = fwVer;
@@ -284,6 +285,7 @@ public class ArduPilotDriver : IAutopilotDriver
         }
 
         var newPortInfo = portScanner.GetPortDescription(targetPort);
+
         currentMode = BootMode.Normal;
         UpdateSessionPortAndState(targetPort, DeviceState.Connected);
 
@@ -386,7 +388,7 @@ public class ArduPilotDriver : IAutopilotDriver
                 await this.bootloader.ProgramMultiAsync(chunk, ct);
                 bytesWritten += size;
 
-                // Report progress as 0-80% for writing phase. 
+                // Report progress as 0-80% for writing phase.
                 var percent = (int)(80.0 * bytesWritten / totalBytes);
                 var prevPercent = (int)(80.0 * (bytesWritten - size) / totalBytes);
 
@@ -928,6 +930,7 @@ public class ArduPilotDriver : IAutopilotDriver
         logger.LogDebug("Switching mode {From} → {To}", currentMode, mode);
 
         var rebootResult = await RebootAsync(mode, ct);
+
 
         if (!rebootResult.Success)
         {

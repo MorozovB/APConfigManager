@@ -110,6 +110,9 @@ export const SessionSection = ({ index, total, slotId, onClose, onRunningChange 
 
     useEffect(() => {
         if (!session.sessionId || !session.data) { setArmingValue(null); return; }
+        // Board in bootloader / no firmware: nothing to read, and forcing Normal
+        // mode here would fight a flash and hang on an empty board.
+        if (!session.data.firmwareVersion) { setArmingValue(null); return; }
         let cancelled = false;
         (async () => {
             try {

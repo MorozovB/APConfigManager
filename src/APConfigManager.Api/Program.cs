@@ -13,6 +13,12 @@ using APConfigManager.Infrastructure.Transport;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Logging;
 
+AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+    Console.Error.WriteLine($"[FATAL] {e.ExceptionObject}");
+TaskScheduler.UnobservedTaskException += (_, e) =>
+    Console.Error.WriteLine($"[UNOBSERVED] {e.Exception}");
+
+
 var builder = WebApplication.CreateBuilder(args);
 
 // ─── Controllers & Swagger ──────────────────────
