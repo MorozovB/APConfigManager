@@ -19,16 +19,48 @@ public class ParameterUploadStrategy : IParameterUploadStrategy
     private static readonly HashSet<string> ReadOnlyPrefixes = new(StringComparer.OrdinalIgnoreCase)
     {
         "STAT_",
-        "INS_GYR1_CALTEMP",
-        "INS_GYR2_CALTEMP",
-        "INS_GYR3_CALTEMP",
-        "INS4_GYR_CALTEMP",
-        "INS5_GYR_CALTEMP",
         "INS_ACC1_CALTEMP",
         "INS_ACC2_CALTEMP",
         "INS_ACC3_CALTEMP",
         "INS4_ACC_CALTEMP",
         "INS5_ACC_CALTEMP",
+
+        // Gyro calibration temperatures — per-sensor, not portable between boards
+        "INS_GYR1_CALTEMP",
+        "INS_GYR2_CALTEMP",
+        "INS_GYR3_CALTEMP",
+        "INS4_GYR_CALTEMP",
+        "INS5_GYR_CALTEMP",
+
+        // Gyro offsets — per-sensor calibration, not portable between boards
+        "INS_GYROFFS_",
+        "INS_GYR2OFFS_",
+        "INS_GYR3OFFS_",
+        "INS4_GYROFFS_",
+        "INS5_GYROFFS_",
+        // Accel offsets — same reasoning
+        "INS_ACCOFFS_",
+        "INS_ACC2OFFS_",
+        "INS_ACC3OFFS_",
+        "INS4_ACCOFFS_",
+        "INS5_ACCOFFS_",
+        // Accel scale — per-sensor calibration
+        "INS_ACCSCAL_",
+        "INS_ACC2SCAL_",
+        "INS_ACC3SCAL_",
+        "INS4_ACCSCAL_",
+        "INS5_ACCSCAL_",
+        // Sensor hardware IDs — bound to physical hardware present on the board
+        "INS_ACC_ID",
+        "INS_ACC2_ID",
+        "INS_ACC3_ID",
+        "INS4_ACC_ID",
+        "INS5_ACC_ID",
+        "INS_GYR_ID",
+        "INS_GYR2_ID",
+        "INS_GYR3_ID",
+        "INS4_GYR_ID",
+        "INS5_GYR_ID",
     };
 
     private static readonly HashSet<string> AutoCalculatedPrefixes = new(StringComparer.OrdinalIgnoreCase)
@@ -401,32 +433,29 @@ public class ParameterUploadStrategy : IParameterUploadStrategy
             }
 
             // Final verification: read actual state from device
-            var verifyParams = await telemetry.RequestAllParamsAsync(ct);
+            var attempted = new HashSet<string>(
+                toUpload.Select(p => p.Name), StringComparer.OrdinalIgnoreCase);
 
+            var verifyParams = await telemetry.RequestAllParamsAsync(ct);
             var verifyMap = verifyParams
                 .GroupBy(p => p.Name)
-                .ToDictionary(g => g.Key, g => g.Last().Value);
+                .ToDictionary(g => g.Key, g => g.Last().Value, StringComparer.OrdinalIgnoreCase);
 
             var realFailed = 0;
             foreach (var param in parameters)
             {
-                if (IsReadOnly(param.Name) || IsAutoCalculated(param.Name))
+                if (!attempted.Contains(param.Name))
                     continue;
-
-                if (DeferredParams.Any(d => param.Name.Equals(d, StringComparison.OrdinalIgnoreCase)))
-                    continue;
-
-                if (FinalForceParams.Any(f => param.Name.Equals(f, StringComparison.OrdinalIgnoreCase)))
-                    continue;
-
                 if (!verifyMap.TryGetValue(param.Name, out var actualValue))
                     continue;
-
                 if (!AreParamsEqual(actualValue, param.Value))
                 {
                     realFailed++;
+                    logger.LogWarning("VERIFY-FAIL '{Name}' file={File} device={Device}",
+                        param.Name, param.Value, actualValue);   // NEW MARKER
                 }
             }
+
             logger.LogInformation(
                 "Param upload done: sent={Sent}, failed={Failed}, hidden={Hidden}, readonly={ReadOnly}, total={Total}",
                 sent, realFailed, missing.Count, skippedReadOnly + skippedAutoCalc, parameters.Count);
@@ -459,10 +488,12 @@ public class ParameterUploadStrategy : IParameterUploadStrategy
     /// </summary>
     private static bool IsReadOnly(string paramName)
     {
-        if (ReadOnlyPrefixes.Contains(paramName))
-        {
+        // Per-sensor calibration temperatures (INS*_CALTEMP) are never portable.
+        if (paramName.EndsWith("_CALTEMP", StringComparison.OrdinalIgnoreCase))
             return true;
-        }
+
+        if (ReadOnlyPrefixes.Contains(paramName))
+            return true;
 
         foreach (var prefix in ReadOnlyPrefixes)
         {
