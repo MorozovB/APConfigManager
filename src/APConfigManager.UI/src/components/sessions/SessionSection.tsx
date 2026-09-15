@@ -110,10 +110,11 @@ export const SessionSection = ({ index, total, slotId, onClose, onRunningChange 
 
     useEffect(() => {
         if (!session.sessionId || !session.data) { setArmingValue(null); return; }
-        // Board in bootloader / no firmware: nothing to read, and forcing Normal
-        // mode here would fight a flash and hang on an empty board.
+        // Only read when the board is running firmware in normal mode.
         if (!session.data.firmwareVersion) { setArmingValue(null); return; }
+        if (session.deviceState !== 'Connected') { setArmingValue(null); return; }
         let cancelled = false;
+        setArmingValue(null); // show "reading…" while (re)fetching after a reboot
         (async () => {
             try {
                 const p = await getParameter(session.sessionId!, 'ARMING_REQUIRE');
@@ -123,7 +124,7 @@ export const SessionSection = ({ index, total, slotId, onClose, onRunningChange 
             }
         })();
         return () => { cancelled = true; };
-    }, [session.sessionId, session.data]);
+    }, [session.sessionId, session.data?.firmwareVersion, session.deviceState, session.isConnected]);
 
     useEffect(() => {
         onRunningChange(slotId, orchestrator.isRunning);
