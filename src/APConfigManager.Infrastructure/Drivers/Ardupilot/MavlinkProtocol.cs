@@ -368,43 +368,41 @@ public class MavLinkProtocol : ITelemetryProtocol
     /// Sends MAV_CMD_FLASH_BOOTLOADER command and waits for ACK.
     /// Returns true if bootloader was updated successfully.
     /// </summary>
-    public async Task<bool> FlashBootloaderAsync(CancellationToken ct)
+        public async Task<bool> FlashBootloaderAsync(CancellationToken ct)
     {
         // Establish GCS presence
         await EstablishGcsPresenceAsync(ct);
 
-        logger.LogDebug("FlashBootloader: sending MAV_CMD_FLASH_BOOTLOADER ({Command}), param5={Param5}", ArduPilotConstants.MavCmdFlashBootloader, ArduPilotConstants.BootloaderMagicNumber);
+        logger.LogDebug("FlashBootloader: sending MAV_CMD_FLASH_BOOTLOADER ({Command}), param5={Param5}",
+            ArduPilotConstants.MavCmdFlashBootloader, ArduPilotConstants.BootloaderMagicNumber);
 
-        // Bootloader write takes 5-15 seconds
+        // Bootloader write takes 5-15 seconds. On 4.6.x the COMMAND_ACK for
+        // FLASH_BOOTLOADER is often not delivered reliably (same as PREFLIGHT_STORAGE),
+        // yet the bootloader IS written. So the ACK is treated as diagnostic only;
+        // real success is confirmed by the caller via reboot + reconnect.
         var ack = await SendCommandAndWaitAckAsync(
             ArduPilotConstants.MavCmdFlashBootloader, 30000, ct,
             param5: ArduPilotConstants.BootloaderMagicNumber);
 
         if (ack is null)
         {
-            logger.LogWarning("FlashBootloader: no ACK received (timeout 30s)");
-
-            return false;
+            logger.LogInformation("FlashBootloader: no COMMAND_ACK (treating as diagnostic; success confirmed via reboot)");
+            return true;   // command sent; caller verifies by reboot/reconnect
         }
 
-        logger.LogDebug("FlashBootloader: ACK received, command={Command}, result={Result}", ack.Value.command, ack.Value.result);
-
-        // Check that ACK is for our command
         if (ack.Value.command != ArduPilotConstants.MavCmdFlashBootloader)
         {
             logger.LogDebug("FlashBootloader: ACK for wrong command ({Command}), ignoring", ack.Value.command);
-
-            return false;
+            return true;   // unrelated ACK; don't treat as failure
         }
 
-        // MAV_RESULT.ACCEPTED = 0
         if (ack.Value.result == (byte)MAV_RESULT.ACCEPTED)
         {
-            logger.LogInformation("FlashBootloader: bootloader updated successfully");
-
+            logger.LogInformation("FlashBootloader: bootloader update accepted by device");
             return true;
         }
 
+        // Only an explicit rejection is a real failure.
         var resultName = ack.Value.result switch
         {
             1 => "TEMPORARILY_REJECTED",
@@ -413,9 +411,7 @@ public class MavLinkProtocol : ITelemetryProtocol
             4 => "FAILED",
             _ => $"UNKNOWN ({ack.Value.result})"
         };
-
-        logger.LogWarning("FlashBootloader: rejected with result={ResultName}", resultName);
-
+        logger.LogWarning("FlashBootloader: device rejected update (result={ResultName})", resultName);
         return false;
     }
 
