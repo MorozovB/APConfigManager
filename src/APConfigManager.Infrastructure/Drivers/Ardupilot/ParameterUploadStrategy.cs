@@ -452,7 +452,7 @@ public class ParameterUploadStrategy : IParameterUploadStrategy
                 {
                     realFailed++;
                     logger.LogWarning("VERIFY-FAIL '{Name}' file={File} device={Device}",
-                        param.Name, param.Value, actualValue);   // NEW MARKER
+                        param.Name, param.Value, actualValue);
                 }
             }
 

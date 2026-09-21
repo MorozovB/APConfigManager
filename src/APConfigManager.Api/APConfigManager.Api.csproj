@@ -15,4 +15,23 @@
     <ProjectReference Include="..\APConfigManager.Infrastructure\APConfigManager.Infrastructure.csproj" />
   </ItemGroup>
 
+  <PropertyGroup>
+    <ReactProjectPath>$(MSBuildThisFileDirectory)..\APConfigManager.UI\</ReactProjectPath>
+    <ReactDistPath>$(ReactProjectPath)dist\</ReactDistPath>
+  </PropertyGroup>
+
+  <Target Name="BuildReactApp" BeforeTargets="Build" Condition="'$(Configuration)' != 'Debug' And Exists('$(ReactProjectPath)package.json')">
+    <Exec WorkingDirectory="$(ReactProjectPath)" Command="npm ci" Condition="!Exists('$(ReactProjectPath)node_modules')" />
+    <Exec WorkingDirectory="$(ReactProjectPath)" Command="npm run build" />
+  </Target>
+
+  <Target Name="CopyReactToWwwroot" AfterTargets="Build" Condition="'$(Configuration)' != 'Debug' And Exists('$(ReactDistPath)')">
+    <ItemGroup>
+      <ReactFiles Include="$(ReactDistPath)**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(ReactFiles)"
+          DestinationFiles="@(ReactFiles->'$(OutDir)wwwroot\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+
 </Project>
