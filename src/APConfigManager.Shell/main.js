@@ -8,6 +8,7 @@ const API_URL  = 'http://localhost:5000';
 
 let mainWindow = null;
 let apiProcess = null;
+let lastApiFailure = null;
 
 // ---------------------------------------------------------------------------
 // API process lifecycle
@@ -40,10 +41,18 @@ function startApi() {
     },
   });
 
-  apiProcess.on('error', (err) => console.error('[shell] API spawn error:', err));
+  apiProcess.on('error', (err) => {
+      console.error('[shell] API spawn error:', err);
+      lastApiFailure = `Failed to launch the backend process: ${err.message}`;
+  });
   apiProcess.on('exit', (code, signal) => {
-    if (code) console.error('[shell] API exited. code=', code, 'signal=', signal);
-    apiProcess = null;
+      if (code) {
+          console.error('[shell] API exited. code=', code, 'signal=', signal);
+          lastApiFailure =
+              `The backend process exited unexpectedly (code ${code}` +
+              (signal ? `, signal ${signal}` : '') + ').';
+      }
+      apiProcess = null;
   });
 }
 
@@ -85,6 +94,27 @@ async function waitForApi(timeoutMs = 60000) {
 async function resolveUrl() {
   if (await ping(VITE_URL)) return VITE_URL;
   return API_URL;
+}
+
+function describeApiFailure() {
+  if (lastApiFailure) return lastApiFailure;
+  return `The backend did not start responding on ${API_URL} within the timeout.`;
+}
+
+// Shows a clear failure page instead of loading a dead URL (blank/old UI).
+async function showApiError(detail) {
+  const win = new BrowserWindow({
+    width: 760,
+    height: 460,
+    title: 'AP Configuration Manager',
+    backgroundColor: '#1a1a2e',
+    webPreferences: { contextIsolation: true, nodeIntegration: false },
+  });
+  mainWindow = win;
+  win.on('closed', () => { if (mainWindow === win) mainWindow = null; });
+  await win.loadFile(path.join(__dirname, 'error.html'), {
+    search: `detail=${encodeURIComponent(detail)}`,
+  });
 }
 
 // ---------------------------------------------------------------------------
