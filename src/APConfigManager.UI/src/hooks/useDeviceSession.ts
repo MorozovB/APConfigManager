@@ -100,7 +100,6 @@ export const useDeviceSession = () => {
         });
 
         connection.onreconnected(() => {
-            console.log('SignalR reconnected');
             if (data?.id) {
                 subscribeToSession(connection, data.id);
             }

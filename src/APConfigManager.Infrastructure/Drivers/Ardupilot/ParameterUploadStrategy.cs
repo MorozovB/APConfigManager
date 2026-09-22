@@ -446,12 +446,15 @@ public class ParameterUploadStrategy : IParameterUploadStrategy
             {
                 if (!attempted.Contains(param.Name))
                     continue;
+
                 if (!verifyMap.TryGetValue(param.Name, out var actualValue))
                     continue;
+
                 if (!AreParamsEqual(actualValue, param.Value))
                 {
                     realFailed++;
-                    logger.LogWarning("VERIFY-FAIL '{Name}' file={File} device={Device}",
+                    logger.LogWarning(
+                        "Parameter '{Name}' did not verify: file={File}, device={Device}",
                         param.Name, param.Value, actualValue);
                 }
             }
