@@ -460,7 +460,7 @@ public class MavLinkProtocol : ITelemetryProtocol
     /// <summary>
     /// Checks if the core sensors (gyro and accelerometer) are healthy by reading SYS_STATUS messages within a specified timeout.
     /// </summary>
-    public async Task<bool> AreCoreSensorsHealthyAsync(int timeoutMs, CancellationToken ct)
+        public async Task<bool> AreCoreSensorsHealthyAsync(int timeoutMs, CancellationToken ct)
     {
         await EstablishGcsPresenceAsync(ct);
 
@@ -469,40 +469,69 @@ public class MavLinkProtocol : ITelemetryProtocol
         const uint Accel = 2;   // 3D accel
         const uint Core = Gyro | Accel;
 
-        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+        // Watch SYS_STATUS as it streams instead of one-shot request/wait cycles
+        // that trip on a single transient reading during sensor warm-up. Re-request
+        // each burst (belt-and-suspenders if passive streaming is off) and drain the
+        // stream continuously — same shape as RequestAllParamsAsync.
+        var absoluteLimit = DateTime.UtcNow.AddMilliseconds(timeoutMs);
 
-        while (DateTime.UtcNow < deadline)
+        var sawStatus = false;
+        uint lastEnabled = 0;
+        uint lastHealth = 0;
+
+        while (DateTime.UtcNow < absoluteLimit)
         {
             ct.ThrowIfCancellationRequested();
 
-            MAVLinkMessage? msg = null;
-            try
-            {
-                msg = await RequestMessageAsync(MAVLINK_MSG_ID.SYS_STATUS, 2000, ct);
-            }
-            catch (OperationCanceledException) { throw; }
-            catch
-            {
+            // Nudge the autopilot to emit SYS_STATUS for this burst.
+            await SendCommandAsync(
+                (ushort)MAV_CMD.REQUEST_MESSAGE, ct, param1: (uint)MAVLINK_MSG_ID.SYS_STATUS);
 
-            }
+            var burstDeadline = DateTime.UtcNow.AddSeconds(1.5);
 
-            if (msg?.data is mavlink_sys_status_t status)
+            while (DateTime.UtcNow < burstDeadline && DateTime.UtcNow < absoluteLimit)
             {
-                var enabled = status.onboard_control_sensors_enabled & Core;
-                var healthy = status.onboard_control_sensors_health & Core;
+                ct.ThrowIfCancellationRequested();
 
-                if (enabled == Core && healthy == Core)
+                var msg = await ReadMessageAsync(ct);
+                if (msg?.data is null)
+                {
+                    continue;
+                }
+
+                if (msg.msgid == (uint)MAVLINK_MSG_ID.HEARTBEAT)
+                {
+                    await SendHeartbeatAsync(ct);
+                    continue;
+                }
+
+                if (msg.data is not mavlink_sys_status_t status)
+                {
+                    continue;
+                }
+
+                sawStatus = true;
+                lastEnabled = status.onboard_control_sensors_enabled;
+                lastHealth = status.onboard_control_sensors_health;
+
+                if ((lastEnabled & Core) == Core && (lastHealth & Core) == Core)
                 {
                     return true;
                 }
-
-                logger.LogWarning(
-                    "Core sensors not healthy: enabled=0x{En:X} health=0x{He:X}",
-                    status.onboard_control_sensors_enabled,
-                    status.onboard_control_sensors_health);
             }
 
-            await Task.Delay(300, ct);
+            await Task.Delay(200, ct);
+        }
+
+        if (sawStatus)
+        {
+            logger.LogWarning(
+                "Core sensors not healthy before timeout: enabled=0x{En:X} health=0x{He:X}",
+                lastEnabled, lastHealth);
+        }
+        else
+        {
+            logger.LogWarning("No SYS_STATUS received within {TimeoutMs} ms.", timeoutMs);
         }
 
         return false;
