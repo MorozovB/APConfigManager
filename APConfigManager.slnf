@@ -1,0 +1,12 @@
+{
+  "solution": {
+    "path": "APConfigManager.sln",
+    "projects": [
+      "src\\APConfigManager.Core\\APConfigManager.Core.csproj",
+      "src\\APConfigManager.Infrastructure\\APConfigManager.Infrastructure.csproj",
+      "src\\APConfigManager.Api\\APConfigManager.Api.csproj",
+      "tests\\APConfigManager.Infrastructure.Tests\\APConfigManager.Infrastructure.Tests.csproj",
+      "tests\\APConfigManager.Api.Tests\\APConfigManager.Api.Tests.csproj"
+    ]
+  }
+}

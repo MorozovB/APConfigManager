@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, Notification } = require('electron');
 const { spawn } = require('child_process');
 const http = require('http');
 const path = require('path');
@@ -122,8 +122,19 @@ async function showApiError(detail) {
 // ---------------------------------------------------------------------------
 ipcMain.on('operations-finished', () => {
   if (!mainWindow) return;
-  if (mainWindow.isFocused()) return;
+  if (mainWindow.isFocused() && !mainWindow.isMinimized()) return;
+
+  // flashFrame maps to the X11 urgency hint / Windows taskbar; on Wayland it is a
+  // no-op, so a desktop notification is the reliable attention cue on Linux (KDE
+  // shows it and plays its notification sound).
   mainWindow.flashFrame(true);
+
+  if (Notification.isSupported()) {
+    new Notification({
+      title: 'AP Configuration Manager',
+      body: 'Operations finished.',
+    }).show();
+  }
 });
 
 app.on('browser-window-focus', () => {
@@ -140,10 +151,13 @@ async function createWindow() {
     title: 'AP Configuration Manager',
     backgroundColor: '#1a1a2e',
     show: false,
-    webPreferences: {
+        webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
       preload: path.join(__dirname, 'preload.js'),
+      // Keep the renderer's timers/JS (completion detection) alive when the window
+      // is minimized — Chromium throttles background windows by default.
+      backgroundThrottling: false,
     },
   });
 
@@ -157,9 +171,22 @@ async function createWindow() {
 // App lifecycle
 // ---------------------------------------------------------------------------
 app.whenReady().then(async () => {
-  startApi();
+  // If the API port is already served (e.g. a detached instance from a previous
+  // run that outlived its window), reuse it instead of spawning a second one.
+  if (await ping(API_URL)) {
+    console.warn('[shell] API port already in use — reusing the existing instance.');
+  } else {
+    startApi();
+  }
+
   const ok = await waitForApi();
-  if (!ok) console.error('[shell] API did not become ready in time');
+  if (!ok) {
+    const reason = describeApiFailure();
+    console.error('[shell] API did not become ready:', reason);
+    await showApiError(reason);
+    return;
+  }
+
   await createWindow();
 });
 
