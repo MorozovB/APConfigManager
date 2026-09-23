@@ -25,12 +25,24 @@
     <Exec WorkingDirectory="$(ReactProjectPath)" Command="npm run build" />
   </Target>
 
-  <Target Name="CopyReactToWwwroot" AfterTargets="Build" Condition="'$(Configuration)' != 'Debug' And Exists('$(ReactDistPath)')">
+    <Target Name="CopyReactToWwwroot" AfterTargets="Build" Condition="'$(Configuration)' != 'Debug' And Exists('$(ReactDistPath)')">
     <ItemGroup>
       <ReactFiles Include="$(ReactDistPath)**\*" />
     </ItemGroup>
     <Copy SourceFiles="@(ReactFiles)"
-          DestinationFiles="@(ReactFiles->'$(OutDir)wwwroot\%(RecursiveDir)%(Filename)%(Extension)')"
+          DestinationFiles="@(ReactFiles->'$(OutDir)wwwroot/%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <!-- dotnet publish drops build output into a separate publish dir; the wwwroot
+       copied above lives only under bin, so copy the SPA into the publish output
+       too. Forward slashes keep this correct on Linux (packaging host). -->
+  <Target Name="CopyReactToPublish" AfterTargets="Publish" Condition="Exists('$(ReactDistPath)')">
+    <ItemGroup>
+      <ReactPublishFiles Include="$(ReactDistPath)**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(ReactPublishFiles)"
+          DestinationFiles="@(ReactPublishFiles->'$(PublishDir)wwwroot/%(RecursiveDir)%(Filename)%(Extension)')"
           SkipUnchangedFiles="true" />
   </Target>
 
