@@ -76,7 +76,7 @@ public sealed class SerialPortAdapter : ISerialPortAdapter
             {
                 lastException = ex;
                 logger.LogWarning(ex, "Failed to open {Port}, attempt {Attempt}/{Max}", port, attempt, MaxRetries);
-                 
+
                 _serialPort?.Dispose();
                 _serialPort = null;
 
@@ -108,7 +108,7 @@ public sealed class SerialPortAdapter : ISerialPortAdapter
             {
                 _serialPort.Close();
             }
-                
+
         }
         finally
         {
@@ -126,7 +126,7 @@ public sealed class SerialPortAdapter : ISerialPortAdapter
         {
             throw new InvalidOperationException("Serial port is not open.");
         }
-            
+
         return await _serialPort.BaseStream.ReadAsync(buffer, offset, count, ct);
     }
 
@@ -138,7 +138,7 @@ public sealed class SerialPortAdapter : ISerialPortAdapter
         if (_serialPort is null || !_serialPort.IsOpen)
         {
             throw new InvalidOperationException("Serial port is not open.");
-        }            
+        }
 
         await _serialPort.BaseStream.WriteAsync(data, offset, count, ct);
     }
@@ -152,7 +152,7 @@ public sealed class SerialPortAdapter : ISerialPortAdapter
         {
             throw new InvalidOperationException("Serial port is not open.");
         }
-            
+
         _serialPort.BaudRate = baudRate;
     }
 

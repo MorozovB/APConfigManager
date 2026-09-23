@@ -100,10 +100,8 @@ export const removeHandlers = (connection: HubConnection): void => {
 export const startConnection = async (connection: HubConnection): Promise<void> => {
   try {
     await connection.start();
-    console.log('SignalR connected');
   } catch (error) {
     console.error('SignalR connection failed:', error);
-    // Повторная попытка через 5 секунд
     setTimeout(() => startConnection(connection), 5000);
   }
 };
@@ -111,7 +109,6 @@ export const startConnection = async (connection: HubConnection): Promise<void> 
 export const stopConnection = async (connection: HubConnection): Promise<void> => {
   try {
     await connection.stop();
-    console.log('SignalR disconnected');
   } catch (error) {
     console.error('SignalR disconnect failed:', error);
   }

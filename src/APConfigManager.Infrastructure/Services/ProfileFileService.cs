@@ -12,6 +12,13 @@ namespace APConfigManager.Infrastructure.Services
         private readonly IDeviceProfileRepository repository;
         private readonly string profileFilesRoot;
 
+        // File-system path comparison: case-insensitive on Windows, case-sensitive elsewhere (Linux).
+        private static readonly StringComparison PathComparison =
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+
+        private static readonly StringComparer PathComparer =
+            OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+
         public ProfileFileService(IDeviceProfileRepository repository)
         {
             this.repository = repository;
@@ -105,7 +112,7 @@ namespace APConfigManager.Infrastructure.Services
                 }
             }
 
-            return candidates.Distinct(StringComparer.OrdinalIgnoreCase);
+            return candidates.Distinct(PathComparer);
         }
 
         public void DeleteProfileFiles(Guid profileId)
@@ -134,7 +141,7 @@ namespace APConfigManager.Infrastructure.Services
 
             var profileDir = Path.GetFullPath(Path.Combine(profileFilesRoot, profileId.ToString()));
 
-            if (resolved.StartsWith(profileDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            if (resolved.StartsWith(profileDir + Path.DirectorySeparatorChar, PathComparison))
             {
                 return resolved;
             }
@@ -142,7 +149,7 @@ namespace APConfigManager.Infrastructure.Services
             _ = Directory.CreateDirectory(profileDir);
             var destination = Path.GetFullPath(Path.Combine(profileDir, Path.GetFileName(resolved)));
 
-            if ( !string.Equals(destination, resolved, StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(destination, resolved, PathComparison))
             {
                 File.Copy(resolved, destination, overwrite: true);
             }

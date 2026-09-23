@@ -1,6 +1,7 @@
 using APConfigManager.Core.Interfaces.Drivers;
 using APConfigManager.Core.Interfaces.Transport;
 using APConfigManager.Core.Models;
+using APConfigManager.Infrastructure.Transport;
 using Microsoft.Extensions.Logging;
 using static MAVLink;
 
@@ -14,6 +15,8 @@ public class MavLinkProtocol : ITelemetryProtocol
     private readonly ISerialPortAdapter port;
     private readonly MavlinkParse parser;
     private readonly ILogger<MavLinkProtocol> logger;
+    private Stream? wrappedBaseStream;
+    private Stream? readStream;
 
     private const int HeartbeatPreambleDelayMs = 500;
 
@@ -137,10 +140,13 @@ public class MavLinkProtocol : ITelemetryProtocol
 
     /// <summary>
     /// Requests all parameters from the autopilot via PARAM_REQUEST_LIST.
+    /// The device may answer a single request with only a partial burst and, on
+    /// a repeat, continues from where it left off (wrapping around) rather than
+    /// restarting at index 0 — so received params are accumulated across repeats
+    /// (never cleared) until param_count is reached.
     /// </summary>
     public async Task<List<Parameter>> RequestAllParamsAsync(CancellationToken ct)
     {
-        // Establish GCS presence — autopilot ignores commands without heartbeat stream
         await EstablishGcsPresenceAsync(ct);
 
         var request = new mavlink_param_request_list_t
@@ -149,7 +155,6 @@ public class MavLinkProtocol : ITelemetryProtocol
             target_component = 1
         };
 
-        // Generated once and re-sent in the retry loop (keeps the same sequence bytes on the wire).
         var packet = parser.GenerateMAVLinkPacket20(
             MAVLINK_MSG_ID.PARAM_REQUEST_LIST,
             request,
@@ -157,43 +162,30 @@ public class MavLinkProtocol : ITelemetryProtocol
             ArduPilotConstants.MavSysId,
             ArduPilotConstants.MavCompId);
 
-        var parameters = new List<Parameter>();
+        // Accumulate by index across repeats — never discard what we already have.
+        var received = new Dictionary<ushort, Parameter>();
         var totalExpected = -1;
 
-        for (var attempt = 1; attempt <= 5; attempt++)
+        var absoluteLimit = DateTime.UtcNow.AddSeconds(60);
+
+        for (var attempt = 1; attempt <= 12 && DateTime.UtcNow < absoluteLimit; attempt++)
         {
-            parameters.Clear();
-            totalExpected = -1;
-
             await port.WriteAsync(packet, 0, packet.Length, ct);
-            logger.LogDebug("RequestAllParams: attempt {Attempt}, sent PARAM_REQUEST_LIST", attempt);
+            logger.LogDebug("RequestAllParams: attempt {Attempt}, have {Got}/{Expected}", attempt, received.Count, totalExpected);
 
-            // Time-based deadline instead of consecutive-null counter.
-            // Right after boot the autopilot sends many non-PARAM_VALUE packets
-            // (heartbeat, statustext, system_time) which were incorrectly
-            // eating through the null budget and breaking the loop early.
-            var idleDeadline = DateTime.UtcNow.AddSeconds(4); // reset on each received param
-            var absoluteLimit = DateTime.UtcNow.AddSeconds(60);
+            // Read this burst until the device pauses (short idle) or list completes.
+            var idleDeadline = DateTime.UtcNow.AddSeconds(1.5);
 
-            while (DateTime.UtcNow < absoluteLimit)
+            while (DateTime.UtcNow < idleDeadline && DateTime.UtcNow < absoluteLimit)
             {
                 ct.ThrowIfCancellationRequested();
 
-                // Idle too long with no new params — device stopped sending
-                if (DateTime.UtcNow > idleDeadline)
-                {
-                    logger.LogDebug("RequestAllParams: idle timeout ({Got}/{Expected})", parameters.Count, totalExpected);
-                    break;
-                }
-
                 var msg = await ReadMessageAsync(ct);
-
                 if (msg?.data is null)
                 {
                     continue;
                 }
 
-                // Keep heartbeat stream alive during long param reads.
                 if (msg.msgid == (uint)MAVLINK_MSG_ID.HEARTBEAT)
                 {
                     await SendHeartbeatAsync(ct);
@@ -205,62 +197,41 @@ public class MavLinkProtocol : ITelemetryProtocol
                     continue;
                 }
 
-                var paramValue = (mavlink_param_value_t)msg.data;
-                var name = System.Text.Encoding.ASCII
-                    .GetString(paramValue.param_id)
-                    .TrimEnd('\0');
+                var pv = (mavlink_param_value_t)msg.data;
+                var name = System.Text.Encoding.ASCII.GetString(pv.param_id).TrimEnd('\0');
 
-                parameters.Add(new Parameter
+                received[pv.param_index] = new Parameter
                 {
                     Name = name,
-                    Value = paramValue.param_value,
-                    ParamType = paramValue.param_type
-                });
+                    Value = pv.param_value,
+                    ParamType = pv.param_type
+                };
 
-                totalExpected = paramValue.param_count;
-                idleDeadline = DateTime.UtcNow.AddSeconds(4); // reset idle window
+                totalExpected = pv.param_count;
+                idleDeadline = DateTime.UtcNow.AddSeconds(1.5); // extend while data flows
 
-                if (parameters.Count >= totalExpected)
+                if (totalExpected > 0 && received.Count >= totalExpected)
                 {
-                    logger.LogDebug("RequestAllParams: complete ({Got}/{Expected})", parameters.Count, totalExpected);
                     break;
                 }
             }
 
-            logger.LogDebug("RequestAllParams: attempt {Attempt} received {Got}/{Expected}", attempt, parameters.Count, totalExpected);
-
-            if (parameters.Count > 0 && parameters.Count >= totalExpected)
+            if (totalExpected > 0 && received.Count >= totalExpected)
             {
                 break;
             }
 
-            // Partial read — request only missing indices before next attempt.
-            if (parameters.Count > 0 && totalExpected > 0)
-            {
-                logger.LogDebug($"RequestAllParams: partial read, requesting missing...");
-                await RequestMissingParamsAsync(parameters, totalExpected, ct);
-
-                if (parameters.Count >= totalExpected)
-                {
-                    break;
-                }
-            }
-
-            await Task.Delay(2000, ct);
+            await Task.Delay(200, ct);
         }
 
-        logger.LogInformation("RequestAllParams: final {Got}/{Expected}", parameters.Count, totalExpected);
+        logger.LogInformation("RequestAllParams: final {Got}/{Expected}", received.Count, totalExpected);
 
-        if (parameters.Count < totalExpected)
+        if (totalExpected > 0 && received.Count < totalExpected)
         {
-            logger.LogWarning("Parameter read incomplete: {Got}/{Expected}", parameters.Count, totalExpected);
+            logger.LogWarning("Parameter read incomplete: {Got}/{Expected}", received.Count, totalExpected);
         }
 
-        // Remove duplicates by name, keeping the last received value.
-        return parameters
-            .GroupBy(p => p.Name)
-            .Select(g => g.Last())
-            .ToList();
+        return received.Values.ToList();
     }
 
     /// <summary>
@@ -397,43 +368,41 @@ public class MavLinkProtocol : ITelemetryProtocol
     /// Sends MAV_CMD_FLASH_BOOTLOADER command and waits for ACK.
     /// Returns true if bootloader was updated successfully.
     /// </summary>
-    public async Task<bool> FlashBootloaderAsync(CancellationToken ct)
+        public async Task<bool> FlashBootloaderAsync(CancellationToken ct)
     {
         // Establish GCS presence
         await EstablishGcsPresenceAsync(ct);
 
-        logger.LogDebug("FlashBootloader: sending MAV_CMD_FLASH_BOOTLOADER ({Command}), param5={Param5}", ArduPilotConstants.MavCmdFlashBootloader, ArduPilotConstants.BootloaderMagicNumber);
+        logger.LogDebug("FlashBootloader: sending MAV_CMD_FLASH_BOOTLOADER ({Command}), param5={Param5}",
+            ArduPilotConstants.MavCmdFlashBootloader, ArduPilotConstants.BootloaderMagicNumber);
 
-        // Bootloader write takes 5-15 seconds
+        // Bootloader write takes 5-15 seconds. On 4.6.x the COMMAND_ACK for
+        // FLASH_BOOTLOADER is often not delivered reliably (same as PREFLIGHT_STORAGE),
+        // yet the bootloader IS written. So the ACK is treated as diagnostic only;
+        // real success is confirmed by the caller via reboot + reconnect.
         var ack = await SendCommandAndWaitAckAsync(
             ArduPilotConstants.MavCmdFlashBootloader, 30000, ct,
             param5: ArduPilotConstants.BootloaderMagicNumber);
 
         if (ack is null)
         {
-            logger.LogWarning("FlashBootloader: no ACK received (timeout 30s)");
-
-            return false;
+            logger.LogInformation("FlashBootloader: no COMMAND_ACK (treating as diagnostic; success confirmed via reboot)");
+            return true;   // command sent; caller verifies by reboot/reconnect
         }
 
-        logger.LogDebug("FlashBootloader: ACK received, command={Command}, result={Result}", ack.Value.command, ack.Value.result);
-
-        // Check that ACK is for our command
         if (ack.Value.command != ArduPilotConstants.MavCmdFlashBootloader)
         {
             logger.LogDebug("FlashBootloader: ACK for wrong command ({Command}), ignoring", ack.Value.command);
-
-            return false;
+            return true;   // unrelated ACK; don't treat as failure
         }
 
-        // MAV_RESULT.ACCEPTED = 0
         if (ack.Value.result == (byte)MAV_RESULT.ACCEPTED)
         {
-            logger.LogInformation("FlashBootloader: bootloader updated successfully");
-
+            logger.LogInformation("FlashBootloader: bootloader update accepted by device");
             return true;
         }
 
+        // Only an explicit rejection is a real failure.
         var resultName = ack.Value.result switch
         {
             1 => "TEMPORARILY_REJECTED",
@@ -442,9 +411,7 @@ public class MavLinkProtocol : ITelemetryProtocol
             4 => "FAILED",
             _ => $"UNKNOWN ({ack.Value.result})"
         };
-
-        logger.LogWarning("FlashBootloader: rejected with result={ResultName}", resultName);
-
+        logger.LogWarning("FlashBootloader: device rejected update (result={ResultName})", resultName);
         return false;
     }
 
@@ -493,7 +460,7 @@ public class MavLinkProtocol : ITelemetryProtocol
     /// <summary>
     /// Checks if the core sensors (gyro and accelerometer) are healthy by reading SYS_STATUS messages within a specified timeout.
     /// </summary>
-    public async Task<bool> AreCoreSensorsHealthyAsync(int timeoutMs, CancellationToken ct)
+        public async Task<bool> AreCoreSensorsHealthyAsync(int timeoutMs, CancellationToken ct)
     {
         await EstablishGcsPresenceAsync(ct);
 
@@ -502,40 +469,69 @@ public class MavLinkProtocol : ITelemetryProtocol
         const uint Accel = 2;   // 3D accel
         const uint Core = Gyro | Accel;
 
-        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+        // Watch SYS_STATUS as it streams instead of one-shot request/wait cycles
+        // that trip on a single transient reading during sensor warm-up. Re-request
+        // each burst (belt-and-suspenders if passive streaming is off) and drain the
+        // stream continuously — same shape as RequestAllParamsAsync.
+        var absoluteLimit = DateTime.UtcNow.AddMilliseconds(timeoutMs);
 
-        while (DateTime.UtcNow < deadline)
+        var sawStatus = false;
+        uint lastEnabled = 0;
+        uint lastHealth = 0;
+
+        while (DateTime.UtcNow < absoluteLimit)
         {
             ct.ThrowIfCancellationRequested();
 
-            MAVLinkMessage? msg = null;
-            try
-            {
-                msg = await RequestMessageAsync(MAVLINK_MSG_ID.SYS_STATUS, 2000, ct);
-            }
-            catch (OperationCanceledException) { throw; }
-            catch
-            {
+            // Nudge the autopilot to emit SYS_STATUS for this burst.
+            await SendCommandAsync(
+                (ushort)MAV_CMD.REQUEST_MESSAGE, ct, param1: (uint)MAVLINK_MSG_ID.SYS_STATUS);
 
-            }
+            var burstDeadline = DateTime.UtcNow.AddSeconds(1.5);
 
-            if (msg?.data is mavlink_sys_status_t status)
+            while (DateTime.UtcNow < burstDeadline && DateTime.UtcNow < absoluteLimit)
             {
-                var enabled = status.onboard_control_sensors_enabled & Core;
-                var healthy = status.onboard_control_sensors_health & Core;
+                ct.ThrowIfCancellationRequested();
 
-                if (enabled == Core && healthy == Core)
+                var msg = await ReadMessageAsync(ct);
+                if (msg?.data is null)
+                {
+                    continue;
+                }
+
+                if (msg.msgid == (uint)MAVLINK_MSG_ID.HEARTBEAT)
+                {
+                    await SendHeartbeatAsync(ct);
+                    continue;
+                }
+
+                if (msg.data is not mavlink_sys_status_t status)
+                {
+                    continue;
+                }
+
+                sawStatus = true;
+                lastEnabled = status.onboard_control_sensors_enabled;
+                lastHealth = status.onboard_control_sensors_health;
+
+                if ((lastEnabled & Core) == Core && (lastHealth & Core) == Core)
                 {
                     return true;
                 }
-
-                logger.LogWarning(
-                    "Core sensors not healthy: enabled=0x{En:X} health=0x{He:X}",
-                    status.onboard_control_sensors_enabled,
-                    status.onboard_control_sensors_health);
             }
 
-            await Task.Delay(300, ct);
+            await Task.Delay(200, ct);
+        }
+
+        if (sawStatus)
+        {
+            logger.LogWarning(
+                "Core sensors not healthy before timeout: enabled=0x{En:X} health=0x{He:X}",
+                lastEnabled, lastHealth);
+        }
+        else
+        {
+            logger.LogWarning("No SYS_STATUS received within {TimeoutMs} ms.", timeoutMs);
         }
 
         return false;
@@ -595,11 +591,12 @@ public class MavLinkProtocol : ITelemetryProtocol
 
         try
         {
+            var stream = GetReadStream();
             var msg = await Task.Run(() =>
             {
                 try
                 {
-                    return parser.ReadPacket(port.BaseStream);
+                    return parser.ReadPacket(GetReadStream());
                 }
                 catch (TimeoutException)
                 {
@@ -614,6 +611,23 @@ public class MavLinkProtocol : ITelemetryProtocol
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// Returns a BlockingReadStream over the port's current BaseStream, re-wrapping
+    /// automatically whenever the port is reopened (BaseStream identity changes on
+    /// every Open — connect, reconnect-after-boot, mode switch). Keeps the wrapper
+    /// valid across all reopen paths without the driver resetting anything.
+    /// </summary>
+    private Stream GetReadStream()
+    {
+        var current = port.BaseStream;
+        if (!ReferenceEquals(current, wrappedBaseStream))
+        {
+            wrappedBaseStream = current;
+            readStream = new BlockingReadStream(current);
+        }
+        return readStream!;
     }
 
     public async Task ReadTelemetryLoopAsync(
@@ -771,7 +785,7 @@ public class MavLinkProtocol : ITelemetryProtocol
 
             await SendPacketAsync(MAVLINK_MSG_ID.PARAM_REQUEST_READ, command, ct);
 
-            // Wait up to 500 ms for this specific param 
+            // Wait up to 500 ms for this specific param
             var deadline = DateTime.UtcNow.AddMilliseconds(500);
             while (DateTime.UtcNow < deadline)
             {

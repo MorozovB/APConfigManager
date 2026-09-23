@@ -1,14 +1,14 @@
+#if WINDOWS
 using System.IO.Ports;
 using System.Management;
 using System.Text.RegularExpressions;
-using System.Threading;
 using APConfigManager.Core.Interfaces.Transport;
 using APConfigManager.Core.Models;
 using Microsoft.Extensions.Logging;
 
 namespace APConfigManager.Infrastructure.Transport
 {
-    public class PortScanner : IPortScanner
+    public class WindowsPortScanner : IPortScanner
     {
         private readonly ILogger<PortScanner> logger;
 
@@ -118,7 +118,7 @@ namespace APConfigManager.Infrastructure.Transport
                     if (added != null)
                     {
                         return added;
-                    }    
+                    }
                 }
             }
             catch (OperationCanceledException)
@@ -314,3 +314,4 @@ namespace APConfigManager.Infrastructure.Transport
 
     }
 }
+#endif

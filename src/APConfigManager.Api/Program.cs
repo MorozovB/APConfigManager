@@ -13,6 +13,12 @@ using APConfigManager.Infrastructure.Transport;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Logging;
 
+AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+    Console.Error.WriteLine($"[FATAL] {e.ExceptionObject}");
+TaskScheduler.UnobservedTaskException += (_, e) =>
+    Console.Error.WriteLine($"[UNOBSERVED] {e.Exception}");
+
+
 var builder = WebApplication.CreateBuilder(args);
 
 // ─── Controllers & Swagger ──────────────────────
@@ -52,7 +58,16 @@ builder.Services.AddSingleton<ISettingsRepository, SettingsRepository>();
 builder.Services.AddSingleton<IDeviceProfileRepository, DeviceProfileRepository>();
 
 // ─── Transport ──────────────────────────────────
-builder.Services.AddSingleton<IPortScanner, PortScanner>();
+if (OperatingSystem.IsWindows())
+{
+#if WINDOWS
+    builder.Services.AddSingleton<IPortScanner, WindowsPortScanner>();
+#endif
+}
+else
+{
+    builder.Services.AddSingleton<IPortScanner, LinuxPortScanner>();
+}
 
 // ─── Parsers ────────────────────────────────────
 builder.Services.AddSingleton<IFirmwareParser, ApjFirmwareParser>();

@@ -144,6 +144,9 @@ release/
 dist-electron/
 .electron-builder-cache/
 
+# Published self-contained API bundled into the Electron package (extraResources)
+/src/APConfigManager.Shell/api/
+
 # Packaged installers / update artifacts.
 # Built in CI and attached to GitHub Releases — NEVER committed.
 *.AppImage
