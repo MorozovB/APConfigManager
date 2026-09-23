@@ -10,9 +10,9 @@ namespace APConfigManager.Infrastructure.Transport
 {
     public class WindowsPortScanner : IPortScanner
     {
-        private readonly ILogger<PortScanner> logger;
+        private readonly ILogger<WindowsPortScanner> logger;
 
-        public PortScanner(ILogger<PortScanner> logger)
+        public WindowsPortScanner(ILogger<WindowsPortScanner> logger)
         {
             this.logger = logger;
         }
