@@ -4,10 +4,45 @@
   "description": "AP Configuration Manager desktop shell (Electron)",
   "main": "main.js",
   "license": "UNLICENSED",
+  "author": "II test@build.com",
+  "homepage": "https://github.com/test/",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "publish:api": "dotnet publish ../APConfigManager.Api/APConfigManager.Api.csproj -c Release -r linux-x64 --self-contained true -o api",
+    "predist": "npm run publish:api",
+    "dist": "electron-builder --linux rpm"
+  },
+  "build": {
+    "appId": "com.apconfigmanager.desktop",
+    "productName": "AP Configuration Manager",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "error.html",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "api",
+        "to": "api"
+      }
+    ],
+    "linux": {
+      "target": ["rpm"],
+      "category": "Utility",
+      "icon": "build/icon.png",
+      "maintainer": "<test@build.com>"
+    },
+    "rpm": {
+      "afterInstall": "build/after-install.sh",
+      "afterRemove": "build/after-remove.sh"
+    }
   },
   "devDependencies": {
-    "electron": "^44.2.0"
+    "electron": "^44.2.0",
+    "electron-builder": "^26.0.0"
   }
 }
