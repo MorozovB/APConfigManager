@@ -8,9 +8,10 @@
   "homepage": "https://github.com/test/",
   "scripts": {
     "start": "electron .",
-    "publish:api": "dotnet publish ../APConfigManager.Api/APConfigManager.Api.csproj -c Release -r linux-x64 --self-contained true -o api",
-    "predist": "npm run publish:api",
-    "dist": "electron-builder --linux rpm"
+    "publish:api:linux": "dotnet publish ../APConfigManager.Api/APConfigManager.Api.csproj -c Release -r linux-x64 --self-contained true -o api",
+    "publish:api:win": "dotnet publish ../APConfigManager.Api/APConfigManager.Api.csproj -c Release -r win-x64 --self-contained true -o api",
+    "dist:linux": "npm run publish:api:linux && electron-builder --linux rpm",
+    "dist:win": "npm run publish:api:win && electron-builder --win nsis"
   },
   "build": {
     "appId": "com.apconfigmanager.desktop",
@@ -39,6 +40,17 @@
     "rpm": {
       "afterInstall": "build/after-install.sh",
       "afterRemove": "build/after-remove.sh"
+    },
+    "win": {
+      "target": ["nsis"],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
     }
   },
   "devDependencies": {
