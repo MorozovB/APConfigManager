@@ -7,11 +7,12 @@
   "author": "II test@build.com",
   "homepage": "https://github.com/test/",
   "scripts": {
-    "start": "electron .",
+        "start": "electron .",
+    "sync-version": "node version.mjs sync",
     "publish:api:linux": "dotnet publish ../APConfigManager.Api/APConfigManager.Api.csproj -c Release -r linux-x64 --self-contained true -o api",
     "publish:api:win": "dotnet publish ../APConfigManager.Api/APConfigManager.Api.csproj -c Release -r win-x64 --self-contained true -o api",
-    "dist:linux": "npm run publish:api:linux && electron-builder --linux rpm",
-    "dist:win": "npm run publish:api:win && electron-builder --win nsis"
+    "dist:linux": "npm run sync-version && npm run publish:api:linux && electron-builder --linux rpm",
+    "dist:win": "npm run sync-version && npm run publish:api:win && electron-builder --win nsis"
   },
   "build": {
     "appId": "com.apconfigmanager.desktop",
