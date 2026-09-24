@@ -1,0 +1,74 @@
+name: Build
+
+on:
+  push:
+    branches: [dev, "feat/**"]
+    tags: ["v*"]
+  pull_request:
+    branches: [dev]
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write # needed to attach installers to a draft release on tags
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            dist: dist:linux
+            pattern: src/APConfigManager.Shell/dist/*.rpm
+          - os: windows-latest
+            dist: dist:win
+            pattern: src/APConfigManager.Shell/dist/*.exe
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # electron-builder bundles fpm; on the Ubuntu runner it needs rpmbuild to
+      # emit an .rpm. (libcrypt.so.1, which fpm's ruby needs, already ships on
+      # ubuntu-latest, so the Fedora-only libxcrypt-compat step is not needed.)
+      - name: Install rpm tooling (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y rpm
+
+      - name: Install shell dependencies
+        working-directory: src/APConfigManager.Shell
+        run: npm ci
+
+      # Publishes the self-contained API for this RID (building the React SPA
+      # into wwwroot on the way) and packages the installer.
+      - name: Build installer
+        working-directory: src/APConfigManager.Shell
+        run: npm run ${{ matrix.dist }}
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-${{ runner.os }}
+          path: ${{ matrix.pattern }}
+          if-no-files-found: error
+
+      - name: Attach installer to draft release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: ${{ matrix.pattern }}
