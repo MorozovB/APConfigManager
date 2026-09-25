@@ -12,5 +12,7 @@ namespace APConfigManager.Core.Models.Settings
         public string Theme { get; set; } = "dark";
 
         public int StartupSessions { get; set; } = 1;
+
+        public int PortBaudRate { get; set; } = 115200;
     }
 }

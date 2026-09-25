@@ -1,10 +1,11 @@
 using APConfigManager.Api.Dto;
 using APConfigManager.Api.Hubs;
+using APConfigManager.Core.Data;
 using APConfigManager.Core.Enums;
 using APConfigManager.Core.Interfaces.Services;
+using APConfigManager.Core.Models.Settings;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
-
 namespace APConfigManager.Api.Controllers
 {
     /// <summary>
@@ -16,11 +17,16 @@ namespace APConfigManager.Api.Controllers
     {
         private readonly ISessionManager sessionManager;
         private readonly IHubContext<DeviceHub> hubContext;
+        private readonly ISettingsRepository settingsRepository;
 
-        public SessionsController(ISessionManager sessionManager, IHubContext<DeviceHub> hubContext)
+        public SessionsController(
+            ISessionManager sessionManager,
+            IHubContext<DeviceHub> hubContext,
+            ISettingsRepository settingsRepository)
         {
             this.sessionManager = sessionManager;
             this.hubContext = hubContext;
+            this.settingsRepository = settingsRepository;
         }
 
         /// <summary>
@@ -34,7 +40,11 @@ namespace APConfigManager.Api.Controllers
             {
                 return BadRequest("Port is required.");
             }
-            var session = await sessionManager.CreateSessionAsync(request.Port, request.BaudRate, ct);
+
+            // Global connection speed comes from settings, coerced to a safe value;
+            // the per-request BaudRate is ignored so every port uses the same speed.
+            var baudRate = PortBaudRates.Coerce(settingsRepository.GetSettings().PortBaudRate);
+            var session = await sessionManager.CreateSessionAsync(request.Port, baudRate, ct);
 
             var response = SessionResponse.From(session);
 

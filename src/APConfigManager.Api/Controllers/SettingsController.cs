@@ -41,6 +41,7 @@ namespace APConfigManager.Api.Controllers
                 return BadRequest();
             }
 
+            settings.PortBaudRate = PortBaudRates.Coerce(settings.PortBaudRate);
             settingsRepository.SaveSettings(settings);
 
             return NoContent();

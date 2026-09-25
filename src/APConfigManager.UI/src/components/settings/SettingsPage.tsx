@@ -19,6 +19,9 @@ const languages = [
     { code: 'UA', label: 'Українська' },
 ];
 
+// Standard serial speeds; capped so a user can't pick an unusably high value.
+const baudRates = [57600, 115200, 230400, 460800, 921600];
+
 export const SettingsPage = () => {
     const { t, i18n } = useTranslation();
     const { settings, loading, error, save } = useSettings();
@@ -29,6 +32,8 @@ export const SettingsPage = () => {
 
     const [startupOverride, setStartupOverride] = useState<number | null>(null);
     const startupSessions = startupOverride ?? settings?.startupSessions ?? 1;
+    const [baudRateOverride, setBaudRateOverride] = useState<number | null>(null);
+    const portBaudRate = baudRateOverride ?? settings?.portBaudRate ?? 115200;
 
     const [saved, setSaved] = useState(false);
 
@@ -39,10 +44,9 @@ export const SettingsPage = () => {
     };
 
     const handleSave = async () => {
-        await save({ language, theme: mode });
+        await save({ language, theme: mode, startupSessions, portBaudRate });
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
-        await save({ language, theme: mode, startupSessions });
     };
 
     if (loading) {
@@ -105,6 +109,20 @@ export const SettingsPage = () => {
                     >
                         {[1, 2, 3, 4, 5, 6, 7].map((n) => (
                             <Option key={n} value={String(n)} text={String(n)}>{n}</Option>
+                        ))}
+                    </Dropdown>
+                </Field>
+
+                <Field label={t('settings.portBaudRate')}>
+                    <Dropdown
+                        value={String(portBaudRate)}
+                        selectedOptions={[String(portBaudRate)]}
+                        onOptionSelect={(_e, data) => {
+                            if (data.optionValue) setBaudRateOverride(Number(data.optionValue));
+                        }}
+                    >
+                        {baudRates.map((r) => (
+                            <Option key={r} value={String(r)} text={String(r)}>{r}</Option>
                         ))}
                     </Dropdown>
                 </Field>
