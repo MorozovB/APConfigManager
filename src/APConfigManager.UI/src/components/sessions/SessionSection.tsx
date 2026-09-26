@@ -40,6 +40,7 @@ interface Props {
     onConnectedChange: (id: number, connected: boolean) => void;
     groupProfileId: string | null;
     groupRunToken: number;
+    groupDisconnectToken: number;
 }
 
 export const SessionSection = ({
@@ -51,6 +52,7 @@ export const SessionSection = ({
                                    onConnectedChange,
                                    groupProfileId,
                                    groupRunToken,
+                                   groupDisconnectToken,
                                }: Props) => {
     // const [enabled, setEnabled] = useState(index === 0);
     const [selectedPort, setSelectedPort] = useState('');
@@ -234,6 +236,16 @@ export const SessionSection = ({
             void runProfileById(groupProfileId);
         }
     }, [groupRunToken, groupProfileId, session.isConnected, runProfileById]);
+
+    // Broadcast disconnect: connected sessions disconnect when the token changes.
+    const lastGroupDisconnectToken = useRef(groupDisconnectToken);
+    useEffect(() => {
+        if (groupDisconnectToken === lastGroupDisconnectToken.current) return;
+        lastGroupDisconnectToken.current = groupDisconnectToken;
+        if (session.isConnected) {
+            void handleDisconnect();
+        }
+    }, [groupDisconnectToken, session.isConnected, handleDisconnect]);
 
     const handleArmingToggle = useCallback(async () => {
         if (!session.sessionId || armingValue === null) return;

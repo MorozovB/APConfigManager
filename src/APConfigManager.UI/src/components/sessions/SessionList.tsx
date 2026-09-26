@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Button, Text, Tooltip } from '@fluentui/react-components';
-import { AddRegular, PlayFilled } from '@fluentui/react-icons';
+import { AddRegular, PlayFilled, PlugDisconnectedRegular } from '@fluentui/react-icons';
 import { SessionSection } from './SessionSection';
 import { ProfileSelector } from '../common/ProfileSelector';
 import { useSettings } from '../../hooks/useSettings';
@@ -29,7 +29,9 @@ export const SessionList = () => {
     // Group "run active": one profile applied to every connected session at once.
     const [groupProfileId, setGroupProfileId] = useState<string | null>(null);
     const [groupRunToken, setGroupRunToken] = useState(0);
+    const [groupDisconnectToken, setGroupDisconnectToken] = useState(0);
     const [groupBusy, setGroupBusy] = useState(false);
+
 
     useEffect(() => {
         if (!initialized.current && settings) {
@@ -73,6 +75,10 @@ export const SessionList = () => {
         setGroupRunToken(t => t + 1);
     }, [groupProfileId, connectedCount, profiles, loadFromServer]);
 
+    const handleDisconnectAll = useCallback(() => {
+        setGroupDisconnectToken(t => t + 1);
+    }, []);
+
     const addSlot = () => {
         setSlots(prev => (prev.length >= MAX_SESSIONS ? prev : [...prev, nextId.current++]));
     };
@@ -112,6 +118,17 @@ export const SessionList = () => {
                             Run active ({connectedCount})
                         </Button>
                     </Tooltip>
+                    <Tooltip content="Disconnect all connected sessions" relationship="label">
+                        <Button
+                            appearance="subtle"
+                            icon={<PlugDisconnectedRegular />}
+                            onClick={handleDisconnectAll}
+                            disabled={anyRunning || groupBusy}
+                            style={{ color: '#d63031' }}
+                        >
+                            Disconnect all
+                        </Button>
+                    </Tooltip>
                 </div>
             )}
 
@@ -126,6 +143,7 @@ export const SessionList = () => {
                     onConnectedChange={handleConnectedChange}
                     groupProfileId={groupProfileId}
                     groupRunToken={groupRunToken}
+                    groupDisconnectToken={groupDisconnectToken}
                 />
             ))}
 
