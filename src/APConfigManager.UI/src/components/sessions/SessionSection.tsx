@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef  } from 'react';
 import { getParameter, setParameter } from '../../api/paramsApi';
 import {
     Switch,
@@ -37,9 +37,21 @@ interface Props {
     slotId: number;
     onClose: () => void;
     onRunningChange: (id: number, running: boolean) => void;
+    onConnectedChange: (id: number, connected: boolean) => void;
+    groupProfileId: string | null;
+    groupRunToken: number;
 }
 
-export const SessionSection = ({ index, total, slotId, onClose, onRunningChange }: Props) => {
+export const SessionSection = ({
+                                   index,
+                                   total,
+                                   slotId,
+                                   onClose,
+                                   onRunningChange,
+                                   onConnectedChange,
+                                   groupProfileId,
+                                   groupRunToken,
+                               }: Props) => {
     // const [enabled, setEnabled] = useState(index === 0);
     const [selectedPort, setSelectedPort] = useState('');
     const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
@@ -130,6 +142,10 @@ export const SessionSection = ({ index, total, slotId, onClose, onRunningChange 
         onRunningChange(slotId, orchestrator.isRunning);
     }, [slotId, orchestrator.isRunning, onRunningChange]);
 
+    useEffect(() => {
+        onConnectedChange(slotId, session.isConnected);
+    }, [slotId, session.isConnected, onConnectedChange]);
+
     const handleConnect = useCallback(async () => {
         if (!selectedPort) {
             addLog('Select a port first', 'warn');
@@ -156,12 +172,12 @@ export const SessionSection = ({ index, total, slotId, onClose, onRunningChange 
         onClose();
     }, [session.isConnected, onClose]);
 
-    const handlePlay = useCallback(async () => {
+    const runProfileById = useCallback(async (profileId: string | null) => {
         if (!session.sessionId) {
             addLog('Not connected', 'warn');
             return;
         }
-        const profile = profiles.find(p => p.id === selectedProfileId);
+        const profile = profiles.find(p => p.id === profileId);
         if (!profile) {
             addLog('Select a profile first', 'warn');
             return;
@@ -195,12 +211,29 @@ export const SessionSection = ({ index, total, slotId, onClose, onRunningChange 
         } else {
             addLog('Process completed', 'success');
         }
-    }, [session.sessionId, session.data, selectedProfileId, profiles, getFiles, orchestrator, addLog, session.refreshSession, session.resetProgress]);
+    }, [session.sessionId, session.data, profiles, getFiles, orchestrator, addLog, session.refreshSession, session.resetProgress]);
+
+    const handlePlay = useCallback(
+        () => runProfileById(selectedProfileId),
+        [runProfileById, selectedProfileId],
+    );
 
     const handleStop = useCallback(() => {
         orchestrator.stop();
         addLog('Process stopped', 'warn');
     }, [orchestrator, addLog]);
+
+    // When the container broadcasts a group run, connected sessions run the chosen
+    // profile. A per-slot token ref prevents re-running on unrelated re-renders and
+    // stops a freshly-added slot from replaying a past group run.
+    const lastGroupRunToken = useRef(groupRunToken);
+    useEffect(() => {
+        if (groupRunToken === lastGroupRunToken.current) return;
+        lastGroupRunToken.current = groupRunToken;
+        if (session.isConnected && groupProfileId) {
+            void runProfileById(groupProfileId);
+        }
+    }, [groupRunToken, groupProfileId, session.isConnected, runProfileById]);
 
     const handleArmingToggle = useCallback(async () => {
         if (!session.sessionId || armingValue === null) return;
