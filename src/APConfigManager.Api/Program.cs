@@ -56,6 +56,7 @@ var dbPath = Path.Combine(dbFolder, "app.db");
 builder.Services.AddSingleton(new LiteDbContext(dbPath));
 builder.Services.AddSingleton<ISettingsRepository, SettingsRepository>();
 builder.Services.AddSingleton<IDeviceProfileRepository, DeviceProfileRepository>();
+builder.Services.AddSingleton<IOperationJournalRepository, OperationJournalRepository>();
 
 // ─── Transport ──────────────────────────────────
 if (OperatingSystem.IsWindows())

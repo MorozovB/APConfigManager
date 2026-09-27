@@ -1,3 +1,4 @@
+using APConfigManager.Core.Models;
 using APConfigManager.Core.Models.Settings;
 using LiteDB;
 
@@ -27,6 +28,12 @@ namespace APConfigManager.Infrastructure.Data
         /// </summary>
         public ILiteCollection<DeviceProfile> DeviceProfiles =>
             _database.GetCollection<DeviceProfile>("device_profiles");
+
+        /// <summary>
+        /// User-facing operation journal collection.
+        /// </summary>
+        public ILiteCollection<OperationJournalEntry> Journal =>
+            _database.GetCollection<OperationJournalEntry>("operation_journal");
 
         /// <summary>
         /// Disposes the database connection.
