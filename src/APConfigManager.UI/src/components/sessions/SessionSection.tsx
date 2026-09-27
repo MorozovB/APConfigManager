@@ -12,7 +12,6 @@ import {
     StopFilled,
     PlugConnectedRegular,
     PlugDisconnectedRegular,
-    TextBulletListLtrRegular,
     DismissRegular,
 } from '@fluentui/react-icons';
 
@@ -25,16 +24,13 @@ import { useProfileFiles } from '../../hooks/useProfileFiles';
 
 import { PortSelector } from '../common/PortSelector';
 import { ProfileSelector } from '../common/ProfileSelector';
-import { ProgressBar } from '../common/ProgressBar';
-import { LogConsole, LogEntry } from '../common/LogConsole';
+import { CircularProgress } from '../common/CircularProgress';
+import { LogEntry } from '../common/LogConsole';
 import { DeviceStatusBadge } from '../device/DeviceStatusBadge';
-import { DeviceInfoPanel } from '../device/DeviceInfoPanel';
-import { AltitudeDisplay } from '../device/AltitudeDisplay';
 // import { AccelerometerWidget } from '../device/AccelerometerWidget';
 
 interface Props {
     index: number;
-    total: number;
     slotId: number;
     onClose: () => void;
     onRunningChange: (id: number, running: boolean) => void;
@@ -46,7 +42,6 @@ interface Props {
 
 export const SessionSection = ({
                                    index,
-                                   total,
                                    slotId,
                                    onClose,
                                    onRunningChange,
@@ -58,8 +53,6 @@ export const SessionSection = ({
     // const [enabled, setEnabled] = useState(index === 0);
     const [selectedPort, setSelectedPort] = useState('');
     const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
-    const [showLogs, setShowLogs] = useState(false);
-    const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
     const [blRevBefore, setBlRevBefore] = useState<number>(0);
     const [loadingProfileFiles, setLoadingProfileFiles] = useState(false);
 
@@ -73,9 +66,8 @@ export const SessionSection = ({
     // const accelData = useMockAccelerometer();
 
     const addLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
-        const timestamp = new Date().toLocaleTimeString();
-        setLogEntries(prev => [...prev, { timestamp, message, type }]);
-    }, []);
+        console.debug(`[session ${slotId}] ${type}: ${message}`);
+    }, [slotId]);
 
     useEffect(() => {
         if (!selectedProfileId) return;
@@ -282,156 +274,161 @@ export const SessionSection = ({
     const isBusy = orchestrator.isRunning || session.connecting || loadingProfileFiles;
     const showCompletedResults = (orchestrator.stage === 'done' || orchestrator.stage === 'error')
         && orchestrator.results.length > 0;
+    const progressVisible = session.isConnected
+        && orchestrator.stage !== 'done' && orchestrator.stage !== 'idle' && orchestrator.stage !== 'error';
 
     return (
         <div style={{
-            padding: '16px',
-            backgroundColor: 'var(--colorNeutralBackground2)',
-            borderRadius: '8px',
-            border: `1px solid ${session.isConnected ? 'var(--colorBrandStroke1)' : 'var(--colorNeutralStroke1)'}`,
+            width: '460px',
+            flexShrink: 0,
             display: 'flex',
-            gap: '12px',
-            maxHeight: `calc((100vh - 120px) / ${total})`,
+            flexDirection: 'column',
+            backgroundColor: 'var(--colorNeutralBackground2)',
+            borderRadius: '10px',
+            border: `1px solid ${session.isConnected ? 'var(--colorBrandStroke1)' : 'var(--colorNeutralStroke1)'}`,
             overflow: 'hidden',
         }}>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flexShrink: 0 }}>
+            {/* Tab-style header: close + session number + mode badge */}
+            <div style={{
+                display: 'flex', alignItems: 'center', gap: '8px',
+                padding: '6px 8px 6px 6px',
+                backgroundColor: 'var(--colorNeutralBackground3)',
+                borderBottom: '1px solid var(--colorNeutralStroke1)',
+            }}>
+                <Button
+                    appearance="subtle"
+                    size="small"
+                    icon={<DismissRegular />}
+                    onClick={handleClose}
+                    disabled={isBusy || session.isConnected}
+                    title={session.isConnected ? 'Disconnect before closing' : 'Close session'}
+                    style={{ color: session.isConnected ? undefined : '#d63031', minWidth: 'auto' }}
+                />
+                <Text size={300} weight="semibold">Session {index + 1}</Text>
+                <div style={{ flex: 1 }} />
+                <DeviceStatusBadge state={session.deviceState} />
+            </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                    <Button
-                        appearance="subtle"
-                        icon={<DismissRegular />}
-                        onClick={handleClose}
-                        disabled={isBusy|| session.isConnected}
-                        title={session.isConnected ? 'Disconnect before closing' : 'Close session'}
-                        style={{ color: session.isConnected ? undefined : '#d63031' }}
-                    />
-                    <Text size={200} weight="semibold">Session {index + 1}</Text>
+            {/* Body */}
+            {/* Body */}
+            {/* Body */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '12px' }}>
+
+                {/* Two-column control grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', alignItems: 'center' }}>
+
+                    {/* Port | Connect / Disconnect */}
                     <PortSelector
                         ports={ports}
                         selectedPort={selectedPort}
                         onSelect={setSelectedPort}
                         disabled={session.isConnected || isBusy}
                     />
-                    <Button appearance="primary" icon={<PlugConnectedRegular />}
-                            onClick={handleConnect}
-                            disabled={session.isConnected || !selectedPort || isBusy}>
-                        Connect
-                    </Button>
-                    <Button appearance="subtle" icon={<PlugDisconnectedRegular />}
-                            onClick={handleDisconnect}
-                            disabled={!session.isConnected || isBusy}
-                            style={{ color: session.isConnected ? '#d63031' : undefined }}>
-                        Disconnect
-                    </Button>
-                    <DeviceStatusBadge state={session.deviceState} />
-                    <DeviceInfoPanel session={session.data} visible={session.isConnected} />
-                    <Button appearance="subtle" icon={<TextBulletListLtrRegular />}
-                            onClick={() => setShowLogs(!showLogs)} size="small">
-                        {showLogs ? 'Hide' : 'Logs'}
-                    </Button>
-                </div>
+                    {session.isConnected ? (
+                        <Button appearance="subtle" icon={<PlugDisconnectedRegular />}
+                                onClick={handleDisconnect} disabled={isBusy}
+                                style={{ color: '#d63031', width: '100%' }}>
+                            Disconnect
+                        </Button>
+                    ) : (
+                        <Button appearance="primary" icon={<PlugConnectedRegular />}
+                                onClick={handleConnect} disabled={!selectedPort || isBusy}
+                                style={{ width: '100%' }}>
+                            Connect
+                        </Button>
+                    )}
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                    {/* Profile | Start + Stop */}
                     <ProfileSelector profiles={profiles} selectedProfileId={selectedProfileId}
                                      onSelect={setSelectedProfileId} disabled={isBusy} />
-                    <Tooltip content="Start process" relationship="label">
-                        <Button appearance="primary" icon={<PlayFilled />} onClick={handlePlay}
-                                disabled={!session.isConnected || !selectedProfileId || isBusy || loadingProfileFiles}
-                                style={{ backgroundColor: '#00b894', borderColor: '#00b894', minWidth: '40px' }} />
-                    </Tooltip>
-                    <Tooltip content="Stop process" relationship="label">
-                        <Button appearance="subtle" icon={<StopFilled />} onClick={handleStop}
-                                disabled={!orchestrator.isRunning}
-                                style={{ color: '#d63031', minWidth: '40px' }} />
-                    </Tooltip>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <Tooltip content="Start process" relationship="label">
+                            <Button appearance="primary" icon={<PlayFilled />} onClick={handlePlay}
+                                    disabled={!session.isConnected || !selectedProfileId || isBusy || loadingProfileFiles}
+                                    style={{ backgroundColor: '#00b894', borderColor: '#00b894', flex: 1, minWidth: '40px' }} />
+                        </Tooltip>
+                        <Tooltip content="Stop process" relationship="label">
+                            <Button appearance="subtle" icon={<StopFilled />} onClick={handleStop}
+                                    disabled={!orchestrator.isRunning}
+                                    style={{ color: '#d63031', flex: 1, minWidth: '40px' }} />
+                        </Tooltip>
+                    </div>
 
-                    {session.isConnected && (
-                        <div style={{
-                            display: 'flex', gap: '12px', padding: '3px 8px',
-                            backgroundColor: 'var(--colorNeutralBackground1)',
-                            borderRadius: '6px', border: '1px solid var(--colorNeutralStroke2)',
-                            alignItems: 'center',
-                        }}>
-                            <AltitudeDisplay altitude={session.altitude} />
-                        </div>
-                    )}
+                    {/* Arming | Altitude */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                        <Text size={100} style={{ color: 'var(--colorNeutralForeground3)' }}>ARMING_REQUIRE</Text>
+                        {!session.isConnected ? (
+                            <Text size={300} weight="semibold">—</Text>
+                        ) : armingValue === null ? (
+                            <Text size={200} style={{ color: 'var(--colorNeutralForeground3)' }}>reading…</Text>
+                        ) : (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Text size={200} weight={armingValue < 0.5 ? 'bold' : 'regular'}>0</Text>
+                                <Switch checked={armingValue >= 0.5} disabled={armingBusy} onChange={handleArmingToggle} />
+                                <Text size={200} weight={armingValue >= 0.5 ? 'bold' : 'regular'}>1</Text>
+                            </div>
+                        )}
+                    </div>
+                    <TileField
+                        label="Altitude"
+                        value={session.isConnected && session.altitude !== null ? `${session.altitude.toFixed(1)} m` : '—'}
+                    />
 
-                    {session.isConnected && (
-                        <div style={{
-                            display: 'flex', gap: '8px', padding: '3px 8px',
-                            backgroundColor: 'var(--colorNeutralBackground1)',
-                            borderRadius: '6px', border: '1px solid var(--colorNeutralStroke2)',
-                            alignItems: 'center',
-                        }}>
-                            <Text size={200} weight="semibold">ARMING_REQUIRE</Text>
-
-                            {armingValue === null ? (
-                                <Text size={200} style={{ color: 'var(--colorNeutralForeground3)' }}>reading…</Text>
-                            ) : (
-                                <>
-                                    <Text
-                                        size={200}
-                                        weight={armingValue < 0.5 ? 'bold' : 'regular'}
-                                        style={{ color: armingValue < 0.5
-                                                ? 'var(--colorNeutralForeground1)'
-                                                : 'var(--colorNeutralForeground3)' }}
-                                    >
-                                        0
-                                    </Text>
-
-                                    <Switch
-                                        checked={armingValue >= 0.5}
-                                        disabled={armingBusy}
-                                        onChange={handleArmingToggle}
-                                    />
-
-                                    <Text
-                                        size={200}
-                                        weight={armingValue >= 0.5 ? 'bold' : 'regular'}
-                                        style={{ color: armingValue >= 0.5
-                                                ? 'var(--colorNeutralForeground1)'
-                                                : 'var(--colorNeutralForeground3)' }}
-                                    >
-                                        1
-                                    </Text>
-                                </>
-                            )}
-                        </div>
-                    )}
-
-                    {showCompletedResults && orchestrator.results
-                        .filter(r => r.stage !== 'done')
-                        .map((r, i) => {
-                            if (r.stage === 'flashing')
-                                return <Text key={i} size={200} weight="semibold"
-                                             style={{ color: r.success ? '#00b894' : '#ff7675' }}>
-                                    {r.success ? 'Firmware — Done ✓' : 'Firmware — Failed ✗'}
-                                </Text>;
-                            if (r.stage === 'bootloader') {
-                                if (r.success) {
-                                    const blAfter = session.data?.bootloaderRevision || 0;
-                                    const revInfo = blRevBefore > 0 && blAfter > 0 ? ` (rev ${blRevBefore} → ${blAfter})` : '';
-                                    return <Text key={i} size={200} weight="semibold" style={{ color: '#00b894' }}>
-                                        Bootloader — Done ✓{revInfo}</Text>;
-                                }
-                                return <Text key={i} size={200} weight="semibold" style={{ color: '#ff7675' }}>
-                                    Bootloader — Failed ✗</Text>;
-                            }
-                            if (r.stage === 'params')
-                                return <Text key={i} size={200} weight="semibold"
-                                             style={{ color: r.success ? '#00b894' : '#ff7675' }}>
-                                    {r.success ? 'Parameters — Done ✓' : 'Parameters — Failed ✗'}
-                                </Text>;
-                            return null;
-                        })}
+                    {/* Version FW | BL */}
+                    <TileField
+                        label="Version FW"
+                        value={session.data?.firmwareVersion ? `V${session.data.firmwareVersion}` : '—'}
+                    />
+                    <TileField
+                        label="BL"
+                        value={session.data && session.data.bootloaderRevision > 0 ? `rev ${session.data.bootloaderRevision}` : '—'}
+                    />
                 </div>
 
-                <ProgressBar
-                    percent={session.progress.percent}
-                    message={session.progress.message || orchestrator.stage}
-                    visible={session.isConnected && orchestrator.stage !== 'done' && orchestrator.stage !== 'idle' && orchestrator.stage !== 'error'}
-                />
+                {/* Circular progress + completed results */}
+                {(progressVisible || showCompletedResults) && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                        {progressVisible && (
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                                <CircularProgress percent={session.progress.percent} size={40} stroke={5} />
+                                <Text size={100} style={{ color: 'var(--colorNeutralForeground3)' }}>
+                                    {session.progress.message || orchestrator.stage}
+                                </Text>
+                            </div>
+                        )}
+
+                        {showCompletedResults && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                {orchestrator.results
+                                    .filter(r => r.stage !== 'done')
+                                    .map((r, i) => {
+                                        if (r.stage === 'flashing')
+                                            return <Text key={i} size={200} weight="semibold"
+                                                         style={{ color: r.success ? '#00b894' : '#ff7675' }}>
+                                                {r.success ? 'Firmware — Done ✓' : 'Firmware — Failed ✗'}
+                                            </Text>;
+                                        if (r.stage === 'bootloader') {
+                                            if (r.success) {
+                                                const blAfter = session.data?.bootloaderRevision || 0;
+                                                const revInfo = blRevBefore > 0 && blAfter > 0 ? ` (rev ${blRevBefore} → ${blAfter})` : '';
+                                                return <Text key={i} size={200} weight="semibold" style={{ color: '#00b894' }}>
+                                                    Bootloader — Done ✓{revInfo}</Text>;
+                                            }
+                                            return <Text key={i} size={200} weight="semibold" style={{ color: '#ff7675' }}>
+                                                Bootloader — Failed ✗</Text>;
+                                        }
+                                        if (r.stage === 'params')
+                                            return <Text key={i} size={200} weight="semibold"
+                                                         style={{ color: r.success ? '#00b894' : '#ff7675' }}>
+                                                {r.success ? 'Parameters — Done ✓' : 'Parameters — Failed ✗'}
+                                            </Text>;
+                                        return null;
+                                    })}
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {session.error && (
                     <div style={{
@@ -443,12 +440,20 @@ export const SessionSection = ({
                     </div>
                 )}
             </div>
-
-            {showLogs && (
-                <div style={{ flex: 1, minWidth: '250px', minHeight: 0, overflow: 'hidden' }}>
-                    <LogConsole entries={logEntries} visible={true} />
-                </div>
-            )}
         </div>
     );
 };
+
+
+interface TileFieldProps {
+    label: string;
+    value: string;
+}
+
+/** De-boxed label + value cell for the session tile grid. */
+const TileField = ({ label, value }: TileFieldProps) => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+        <Text size={100} style={{ color: 'var(--colorNeutralForeground3)' }}>{label}</Text>
+        <Text size={300} weight="semibold">{value}</Text>
+    </div>
+);

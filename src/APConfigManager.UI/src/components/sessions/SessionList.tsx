@@ -132,27 +132,48 @@ export const SessionList = () => {
                 </div>
             )}
 
-            {slots.map((id, position) => (
-                <SessionSection
-                    key={id}
-                    slotId={id}
-                    index={position}
-                    total={slots.length || 1}
-                    onClose={() => closeSlot(id)}
-                    onRunningChange={handleRunningChange}
-                    onConnectedChange={handleConnectedChange}
-                    groupProfileId={groupProfileId}
-                    groupRunToken={groupRunToken}
-                    groupDisconnectToken={groupDisconnectToken}
-                />
-            ))}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'stretch' }}>
+                {slots.map((id, position) => (
+                    <SessionSection
+                        key={id}
+                        slotId={id}
+                        index={position}
+                        onClose={() => closeSlot(id)}
+                        onRunningChange={handleRunningChange}
+                        onConnectedChange={handleConnectedChange}
+                        groupProfileId={groupProfileId}
+                        groupRunToken={groupRunToken}
+                        groupDisconnectToken={groupDisconnectToken}
+                    />
+                ))}
 
-            {slots.length < MAX_SESSIONS && (
-                <Button appearance="subtle" icon={<AddRegular />} onClick={addSlot}
-                        style={{ alignSelf: 'flex-start' }}>
-                    Add session
-                </Button>
-            )}
+                {slots.length < MAX_SESSIONS && (
+                    <button
+                        type="button"
+                        onClick={addSlot}
+                        title="Add session"
+                        style={{
+                            width: '460px',
+                            minHeight: '280px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '10px',
+                            cursor: 'pointer',
+                            borderRadius: '10px',
+                            border: '2px dashed var(--colorNeutralStroke2)',
+                            background: 'var(--colorNeutralBackground2)',
+                            color: 'var(--colorNeutralForeground3)',
+                        }}
+                    >
+                        <AddRegular style={{ fontSize: '48px' }} />
+                        <Text size={400} weight="semibold" style={{ color: 'var(--colorNeutralForeground2)' }}>
+                            Add Section
+                        </Text>
+                    </button>
+                )}
+            </div>
         </div>
     );
 };
