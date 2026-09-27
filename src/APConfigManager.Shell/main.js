@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, Notification, Menu } = require('electron');
 const { spawn } = require('child_process');
 const http = require('http');
 const path = require('path');
@@ -142,6 +142,18 @@ app.on('browser-window-focus', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Custom window controls (frameless window)
+// ---------------------------------------------------------------------------
+ipcMain.on('window:minimize', () => mainWindow?.minimize());
+ipcMain.on('window:toggle-maximize', () => {
+  if (!mainWindow) return;
+  if (mainWindow.isMaximized()) mainWindow.unmaximize();
+  else mainWindow.maximize();
+});
+ipcMain.on('window:close', () => mainWindow?.close());
+ipcMain.handle('window:is-maximized', () => mainWindow?.isMaximized() ?? false);
+
+// ---------------------------------------------------------------------------
 // Window
 // ---------------------------------------------------------------------------
 async function createWindow() {
@@ -149,8 +161,9 @@ async function createWindow() {
     width: 1280,
     height: 800,
     title: 'AP Configuration Manager',
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#1e1e24',
     show: false,
+    frame: false,
         webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -164,6 +177,13 @@ async function createWindow() {
   mainWindow.once('ready-to-show', () => mainWindow.show());
   mainWindow.on('closed', () => { mainWindow = null; });
 
+   // Keep the renderer's maximize/restore icon in sync with the actual state.
+  const sendMaximized = () => {
+    if (mainWindow) mainWindow.webContents.send('window:maximized-changed', mainWindow.isMaximized());
+  };
+  mainWindow.on('maximize', sendMaximized);
+  mainWindow.on('unmaximize', sendMaximized);
+
   await mainWindow.loadURL(await resolveUrl());
 }
 
@@ -171,6 +191,8 @@ async function createWindow() {
 // App lifecycle
 // ---------------------------------------------------------------------------
 app.whenReady().then(async () => {
+
+  Menu.setApplicationMenu(null); 
   // If the API port is already served (e.g. a detached instance from a previous
   // run that outlived its window), reuse it instead of spawning a second one.
   if (await ping(API_URL)) {
