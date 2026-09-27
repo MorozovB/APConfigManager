@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef  } from 'react';
 import { getParameter, setParameter } from '../../api/paramsApi';
+import { addJournalEntry } from '../../api/journalApi';
 import {
     Switch,
     Button,
@@ -157,16 +158,27 @@ export const SessionSection = ({
         await session.connect(selectedPort);
         if (session.error) {
             addLog(`Connection failed: ${session.error}`, 'error');
+            void addJournalEntry({ operation: 'Connect', port: selectedPort, success: false, message: session.error });
         } else {
             addLog(`Connected to ${selectedPort}`, 'success');
+            void addJournalEntry({
+                operation: 'Connect',
+                port: selectedPort,
+                deviceSerial: session.data?.deviceSerial ?? '',
+                success: true,
+                message: 'Connected',
+            });
         }
     }, [selectedPort, session, addLog]);
 
     const handleDisconnect = useCallback(async () => {
+        const port = session.data?.port ?? '';
+        const deviceSerial = session.data?.deviceSerial ?? '';
         addLog('Disconnecting...');
         orchestrator.reset();
         await session.disconnect();
         addLog('Disconnected', 'info');
+        void addJournalEntry({ operation: 'Disconnect', port, deviceSerial, success: true, message: 'Disconnected' });
     }, [session, orchestrator, addLog]);
 
     const handleClose = useCallback(() => {
@@ -205,7 +217,8 @@ export const SessionSection = ({
             files.firmwareFile,
             files.paramFile,
             session.refreshSession,
-            session.resetProgress
+            session.resetProgress,
+            { port: session.data?.port ?? '', deviceSerial: session.data?.deviceSerial ?? '' }
         );
 
         if (orchestrator.error) {

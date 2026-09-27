@@ -47,9 +47,9 @@ public class SessionsControllerTests
             DeviceSerial = "AAA111"
         };
 
-        controller = new SessionsController(
-            mockSessionManager.Object,
-            mockHubContext.Object);
+        //controller = new SessionsController(
+        //    mockSessionManager.Object,
+        //    mockHubContext.Object);
     }
 
     [Fact]

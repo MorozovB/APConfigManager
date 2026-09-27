@@ -3,6 +3,7 @@ import { DeviceProfile } from '../types/profile';
 import { startFlash } from '../api/flashApi';
 import { uploadParams } from '../api/paramsApi';
 import { updateBootloader } from '../api/bootApi';
+import { addJournalEntry } from '../api/journalApi';
 
 export type OrchestratorStage =
     | 'idle'
@@ -34,11 +35,25 @@ export const useSessionOrchestrator = () => {
         firmwareFile: File | null,
         paramFile: File | null,
         refreshSession: () => Promise<void>,
-        resetProgress: () => void
+        resetProgress: () => void,
+        journalContext?: { port: string; deviceSerial: string }
     ) => {
         setIsRunning(true);
         setError(null);
         setResults([]);
+
+        // Records a completed operation to the persistent journal (best-effort).
+        const record = (operation: string, success: boolean, message: string) => {
+            if (!journalContext) return;
+            void addJournalEntry({
+                operation,
+                port: journalContext.port,
+                deviceSerial: journalContext.deviceSerial,
+                profileName: profile.name,
+                success,
+                message,
+            });
+        };
 
         try {
             if (profile.profileOptions?.firmware && firmwareFile) {
@@ -48,9 +63,11 @@ export const useSessionOrchestrator = () => {
                 if (!flashResult.success) {
                     const msg = flashResult.message || 'Flash failed';
                     addResult({ stage: 'flashing', success: false, message: msg });
+                    record('Firmware', false, msg);
                     throw new Error(msg);
                 }
                 addResult({ stage: 'flashing', success: true, message: 'Firmware flashed successfully' });
+                record('Firmware', true, 'Firmware flashed successfully');
                 await refreshSession();
             }
 
@@ -61,9 +78,11 @@ export const useSessionOrchestrator = () => {
                 if (!paramResult.success) {
                     const msg = paramResult.message || 'Parameter upload failed';
                     addResult({ stage: 'params', success: false, message: msg });
+                    record('Parameters', false, msg);
                     throw new Error(msg);
                 }
                 addResult({ stage: 'params', success: true, message: 'Parameters uploaded' });
+                record('Parameters', true, 'Parameters uploaded');
                 await refreshSession();
             }
 
@@ -74,9 +93,11 @@ export const useSessionOrchestrator = () => {
                 if (!blResult.success) {
                     const msg = blResult.message || 'Bootloader update failed';
                     addResult({ stage: 'bootloader', success: false, message: msg });
+                    record('Bootloader', false, msg);
                     throw new Error(msg);
                 }
                 addResult({ stage: 'bootloader', success: true, message: 'Bootloader updated successfully' });
+                record('Bootloader', true, 'Bootloader updated successfully');
                 await refreshSession();
             }
 

@@ -9,9 +9,10 @@ import { SessionList } from './components/sessions/SessionList';
 import { ProfilesPage } from './components/profiles/ProfilesPage';
 import { ToolsPage } from './components/tools/ToolsPage';
 import { SettingsPage } from './components/settings/SettingsPage';
+import { JournalPage } from './components/journal/JournalPage';
 import { useActiveSessions } from './hooks/useActiveSessions';
 
-type TabId = 'config' | 'profiles' | 'tools' | 'settings';
+type TabId = 'config' | 'profiles' | 'tools' | 'settings'| 'journal';
 
 function App() {
     const [activeTab, setActiveTab] = useState<TabId>('config');
@@ -76,6 +77,10 @@ function App() {
                              style={isTabLocked('settings') ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}>
                             {t('tabs.settings')}
                         </Tab>
+                        <Tab value="journal" disabled={isTabLocked('journal')}
+                             style={isTabLocked('journal') ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}>
+                            {t('tabs.journal')}
+                        </Tab>
                     </TabList>
                 </div>
 
@@ -84,6 +89,7 @@ function App() {
                     {activeTab === 'profiles' && <ProfilesPage />}
                     {activeTab === 'tools' && <ToolsPage />}
                     {activeTab === 'settings' && <SettingsPage />}
+                    {activeTab === 'journal' && <JournalPage />}
                 </div>
             </FluentProvider>
         </ThemeModeContext.Provider>
