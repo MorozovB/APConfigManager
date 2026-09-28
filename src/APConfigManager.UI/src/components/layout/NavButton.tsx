@@ -14,7 +14,7 @@ interface NavButtonProps {
  */
 export const NavButton = ({ label, active, disabled, onClick }: NavButtonProps) => {
     const [hover, setHover] = useState(false);
-    const raised = hover && !disabled && !active;
+    const hovered = hover && !disabled && !active;
 
     return (
         <button
@@ -36,16 +36,14 @@ export const NavButton = ({ label, active, disabled, onClick }: NavButtonProps) 
                 background: active ? 'var(--colorBrandBackground)' : 'transparent',
                 borderColor: active
                     ? 'var(--colorBrandBackground)'
-                    : raised
+                    : hovered
                         ? 'var(--colorBrandForeground1)'
                         : 'var(--colorNeutralStroke1)',
                 color: active
                     ? 'var(--colorNeutralForegroundOnBrand)'
-                    : raised
+                    : hovered
                         ? 'var(--colorBrandForeground1)'
                         : 'var(--colorNeutralForeground2)',
-                transform: raised ? 'translateY(-0.25em)' : 'none',
-                boxShadow: raised ? '0 0.5em 0.5em -0.4em rgba(30, 197, 255, 0.65)' : 'none',
                 transition: 'transform 0.25s, box-shadow 0.25s, border-color 0.25s, color 0.25s, background 0.25s',
             }}
         >

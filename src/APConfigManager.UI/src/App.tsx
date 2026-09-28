@@ -52,7 +52,7 @@ function App() {
         setActiveTab(tab);
     };
 
-    const isTabLocked = (tab: TabId) => hasActiveSessions && activeTab !== tab && tab !== 'config';
+    const isTabLocked = (tab: TabId) => hasActiveSessions && activeTab !== tab;
 
     return (
         <ThemeModeContext.Provider value={themeCtx}>
@@ -66,10 +66,10 @@ function App() {
                                disabled={isTabLocked('profiles')} onClick={() => selectTab('profiles')} />
                     <NavButton label={t('tabs.tools')} active={activeTab === 'tools'}
                                disabled={isTabLocked('tools')} onClick={() => selectTab('tools')} />
-                    <NavButton label={t('tabs.settings')} active={activeTab === 'settings'}
-                               disabled={isTabLocked('settings')} onClick={() => selectTab('settings')} />
                     <NavButton label={t('tabs.journal')} active={activeTab === 'journal'}
                                disabled={isTabLocked('journal')} onClick={() => selectTab('journal')} />
+                    <NavButton label={t('tabs.settings')} active={activeTab === 'settings'}
+                               disabled={isTabLocked('settings')} onClick={() => selectTab('settings')} />
                 </div>
 
                 <div style={{ flex: 1, padding: '16px', overflow: 'auto' }}>

@@ -7,7 +7,7 @@ interface Props {
 /**
  * Circular progress ring with the percentage shown in the center.
  */
-export const CircularProgress = ({ percent, size = 90, stroke = 8 }: Props) => {
+export const CircularProgress = ({percent, size = 90, stroke = 8}: Props) => {
     const clamped = Math.max(0, Math.min(100, percent));
     const radius = (size - stroke) / 2;
     const circumference = 2 * Math.PI * radius;
@@ -36,7 +36,7 @@ export const CircularProgress = ({ percent, size = 90, stroke = 8 }: Props) => {
                 strokeDasharray={circumference}
                 strokeDashoffset={offset}
                 transform={`rotate(-90 ${center} ${center})`}
-                style={{ transition: 'stroke-dashoffset 0.3s ease' }}
+                style={{transition: 'stroke-dashoffset 0.3s ease'}}
             />
             <text
                 x="50%"

@@ -1,29 +1,31 @@
-import { Badge } from '@fluentui/react-components';
-import { DeviceState } from '../../types/session';
+import {Badge} from '@fluentui/react-components';
+import {DeviceState} from '../../types/session';
+import {useTranslation} from "react-i18next";
 
-const stateConfig: Record<DeviceState, { color: 'success' | 'warning' | 'danger' | 'informative' | 'important'; label: string }> = {
-  Disconnected: { color: 'informative', label: 'Disconnected' },
-  Connected: { color: 'success', label: 'Connected' },
-  InBootloader: { color: 'warning', label: 'Bootloader' },
-  Flashing: { color: 'important', label: 'Flashing' },
-  Erasing: { color: 'danger', label: 'Erasing' },
-  UploadingParams: { color: 'important', label: 'Uploading' },
+const stateConfig: Record<DeviceState, { color: 'success' | 'warning' | 'danger' | 'informative' | 'important'; labelKey: string }> = {
+    Disconnected: { color: 'informative', labelKey: 'device.disconnected' },
+    Connected: { color: 'success', labelKey: 'device.connected' },
+    InBootloader: { color: 'warning', labelKey: 'device.bootloader' },
+    Flashing: { color: 'important', labelKey: 'device.flashing' },
+    Erasing: { color: 'danger', labelKey: 'device.erasing' },
+    UploadingParams: { color: 'important', labelKey: 'device.uploading' },
 };
 
 interface Props {
-  state: DeviceState;
+    state: DeviceState;
 }
 
-export const DeviceStatusBadge = ({ state }: Props) => {
-  const config = stateConfig[state];
+export const DeviceStatusBadge = ({state}: Props) => {
+    const {t} = useTranslation();
+    const config = stateConfig[state];
 
-  return (
-    <Badge
-      appearance="filled"
-  color={config.color}
-  style={{ minWidth: '90px', textAlign: 'center' }}
->
-  {config.label}
-  </Badge>
-);
+    return (
+        <Badge
+            appearance="filled"
+            color={config.color}
+            style={{minWidth: '90px', textAlign: 'center'}}
+        >
+            {t(config.labelKey)}
+        </Badge>
+    );
 };

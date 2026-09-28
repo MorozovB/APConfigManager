@@ -1,11 +1,13 @@
-import { useState, useCallback, useEffect, useRef  } from 'react';
-import { getParameter, setParameter } from '../../api/paramsApi';
-import { addJournalEntry } from '../../api/journalApi';
+import {useState, useCallback, useEffect, useRef, type CSSProperties} from 'react';
+import {getParameter, setParameter} from '../../api/paramsApi';
+import {addJournalEntry} from '../../api/journalApi';
 import {
     Switch,
     Button,
     Text,
     Tooltip,
+    makeStyles,
+    switchClassNames,
 } from '@fluentui/react-components';
 import {
     PlayFilled,
@@ -15,19 +17,45 @@ import {
     DismissRegular,
 } from '@fluentui/react-icons';
 
-import { usePorts } from '../../hooks/usePorts';
-import { useDeviceSession } from '../../hooks/useDeviceSession';
-import { useProfiles } from '../../hooks/useProfiles';
-import { useSessionOrchestrator } from '../../hooks/useSessionOrchestrator';
-import { useProfileFiles } from '../../hooks/useProfileFiles';
+import {usePorts} from '../../hooks/usePorts';
+import {useDeviceSession} from '../../hooks/useDeviceSession';
+import {useProfiles} from '../../hooks/useProfiles';
+import {useSessionOrchestrator} from '../../hooks/useSessionOrchestrator';
+import {useProfileFiles} from '../../hooks/useProfileFiles';
 // import { useMockAccelerometer } from '../device/AccelerometerWidget';
 
-import { PortSelector } from '../common/PortSelector';
-import { ProfileSelector } from '../common/ProfileSelector';
-import { CircularProgress } from '../common/CircularProgress';
-import { LogEntry } from '../common/LogConsole';
-import { DeviceStatusBadge } from '../device/DeviceStatusBadge';
+import {PortSelector} from '../common/PortSelector';
+import {ProfileSelector} from '../common/ProfileSelector';
+import {CircularProgress} from '../common/CircularProgress';
+import {LogEntry} from '../common/LogConsole';
+import {DeviceStatusBadge} from '../device/DeviceStatusBadge';
+import {useTranslation} from "react-i18next";
 // import { AccelerometerWidget } from '../device/AccelerometerWidget';
+
+const fieldBoxStyle: CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '8px',
+    minHeight: '34px',
+    boxSizing: 'border-box',
+    padding: '4px 10px',
+    borderRadius: '6px',
+    border: '1px solid var(--colorNeutralStroke2)',
+    backgroundColor: 'var(--colorNeutralBackground1)',
+};
+
+// Fluent reserves 8px of vertical margin around the Switch indicator, which made
+// the ARMING chip grow taller than the sibling field chips once connected. Trim
+// that margin so the switch fits the chip's fixed height.
+const useStyles = makeStyles({
+    armingSwitch: {
+        [`& .${switchClassNames.indicator}`]: {
+            marginTop: 0,
+            marginBottom: 0,
+        },
+    },
+});
 
 interface Props {
     index: number;
@@ -56,13 +84,15 @@ export const SessionSection = ({
     const [blRevBefore, setBlRevBefore] = useState<number>(0);
     const [loadingProfileFiles, setLoadingProfileFiles] = useState(false);
 
-    const { ports } = usePorts();
+    const {ports} = usePorts();
     const session = useDeviceSession();
-    const { profiles } = useProfiles();
+    const {profiles} = useProfiles();
     const orchestrator = useSessionOrchestrator();
-    const { getFiles, loadFromServer } = useProfileFiles();
+    const {getFiles, loadFromServer} = useProfileFiles();
     const [armingValue, setArmingValue] = useState<number | null>(null);
     const [armingBusy, setArmingBusy] = useState(false);
+    const styles = useStyles();
+    const {t} = useTranslation();
     // const accelData = useMockAccelerometer();
 
     const addLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
@@ -116,10 +146,19 @@ export const SessionSection = ({
     }, [session.logEntries.length, session.logEntries, addLog]);
 
     useEffect(() => {
-        if (!session.sessionId || !session.data) { setArmingValue(null); return; }
+        if (!session.sessionId || !session.data) {
+            setArmingValue(null);
+            return;
+        }
         // Only read when the board is running firmware in normal mode.
-        if (!session.data.firmwareVersion) { setArmingValue(null); return; }
-        if (session.deviceState !== 'Connected') { setArmingValue(null); return; }
+        if (!session.data.firmwareVersion) {
+            setArmingValue(null);
+            return;
+        }
+        if (session.deviceState !== 'Connected') {
+            setArmingValue(null);
+            return;
+        }
         let cancelled = false;
         setArmingValue(null); // show "reading…" while (re)fetching after a reboot
         (async () => {
@@ -130,7 +169,9 @@ export const SessionSection = ({
                 if (!cancelled) setArmingValue(null);
             }
         })();
-        return () => { cancelled = true; };
+        return () => {
+            cancelled = true;
+        };
     }, [session.sessionId, session.data?.firmwareVersion, session.deviceState, session.isConnected]);
 
     useEffect(() => {
@@ -150,7 +191,7 @@ export const SessionSection = ({
         await session.connect(selectedPort);
         if (session.error) {
             addLog(`Connection failed: ${session.error}`, 'error');
-            void addJournalEntry({ operation: 'Connect', port: selectedPort, success: false, message: session.error });
+            void addJournalEntry({operation: 'Connect', port: selectedPort, success: false, message: session.error});
         } else {
             addLog(`Connected to ${selectedPort}`, 'success');
             void addJournalEntry({
@@ -170,7 +211,7 @@ export const SessionSection = ({
         orchestrator.reset();
         await session.disconnect();
         addLog('Disconnected', 'info');
-        void addJournalEntry({ operation: 'Disconnect', port, deviceSerial, success: true, message: 'Disconnected' });
+        void addJournalEntry({operation: 'Disconnect', port, deviceSerial, success: true, message: 'Disconnected'});
     }, [session, orchestrator, addLog]);
 
     const handleClose = useCallback(() => {
@@ -210,7 +251,7 @@ export const SessionSection = ({
             files.paramFile,
             session.refreshSession,
             session.resetProgress,
-            { port: session.data?.port ?? '', deviceSerial: session.data?.deviceSerial ?? '' }
+            {port: session.data?.port ?? '', deviceSerial: session.data?.deviceSerial ?? ''}
         );
 
         if (orchestrator.error) {
@@ -299,24 +340,22 @@ export const SessionSection = ({
                 <Button
                     appearance="subtle"
                     size="small"
-                    icon={<DismissRegular />}
+                    icon={<DismissRegular/>}
                     onClick={handleClose}
                     disabled={isBusy || session.isConnected}
-                    title={session.isConnected ? 'Disconnect before closing' : 'Close session'}
-                    style={{ color: session.isConnected ? undefined : '#d63031', minWidth: 'auto' }}
+                    title={session.isConnected ? t('sessions.disconnectBeforeClosing') : t('sessions.closeSession')}
+                    style={{color: session.isConnected ? undefined : '#d63031', minWidth: 'auto'}}
                 />
-                <Text size={300} weight="semibold">Session {index + 1}</Text>
-                <div style={{ flex: 1 }} />
-                <DeviceStatusBadge state={session.deviceState} />
+                <Text size={300} weight="semibold">{t('sessions.session')} {index + 1}</Text>
+                <div style={{flex: 1}}/>
+                <DeviceStatusBadge state={session.deviceState}/>
             </div>
 
             {/* Body */}
-            {/* Body */}
-            {/* Body */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '12px' }}>
+            <div style={{display: 'flex', flexDirection: 'column', gap: '12px', padding: '12px'}}>
 
                 {/* Two-column control grid */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', alignItems: 'center' }}>
+                <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', alignItems: 'center'}}>
 
                     {/* Port | Connect / Disconnect */}
                     <PortSelector
@@ -326,102 +365,110 @@ export const SessionSection = ({
                         disabled={session.isConnected || isBusy}
                     />
                     {session.isConnected ? (
-                        <Button appearance="subtle" icon={<PlugDisconnectedRegular />}
+                        <Button appearance="subtle" icon={<PlugDisconnectedRegular/>}
                                 onClick={handleDisconnect} disabled={isBusy}
-                                style={{ color: '#d63031', width: '100%' }}>
-                            Disconnect
+                                style={{color: '#d63031', width: '100%'}}>
+                            {t('common.disconnect')}
                         </Button>
                     ) : (
-                        <Button appearance="primary" icon={<PlugConnectedRegular />}
+                        <Button appearance="primary" icon={<PlugConnectedRegular/>}
                                 onClick={handleConnect} disabled={!selectedPort || isBusy}
-                                style={{ width: '100%' }}>
-                            Connect
+                                style={{width: '100%'}}>
+                            {t('common.connect')}
                         </Button>
                     )}
 
                     {/* Profile | Start + Stop */}
                     <ProfileSelector profiles={profiles} selectedProfileId={selectedProfileId}
-                                     onSelect={setSelectedProfileId} disabled={isBusy} />
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                        <Tooltip content="Start process" relationship="label">
-                            <Button appearance="primary" icon={<PlayFilled />} onClick={handlePlay}
+                                     onSelect={setSelectedProfileId} disabled={isBusy}/>
+                    <div style={{display: 'flex', gap: '8px'}}>
+                        <Tooltip content={t('sessions.startProcess')} relationship="label">
+                            <Button appearance="primary" icon={<PlayFilled/>} onClick={handlePlay}
                                     disabled={!session.isConnected || !selectedProfileId || isBusy || loadingProfileFiles}
-                                    style={{ backgroundColor: '#00b894', borderColor: '#00b894', flex: 1, minWidth: '40px' }} />
+                                    style={{
+                                        backgroundColor: '#00b894',
+                                        borderColor: '#00b894',
+                                        flex: 1,
+                                        minWidth: '40px'
+                                    }}/>
                         </Tooltip>
-                        <Tooltip content="Stop process" relationship="label">
-                            <Button appearance="subtle" icon={<StopFilled />} onClick={handleStop}
+                        <Tooltip content={t('sessions.stopProcess')} relationship="label">
+                            <Button appearance="subtle" icon={<StopFilled/>} onClick={handleStop}
                                     disabled={!orchestrator.isRunning}
-                                    style={{ color: '#d63031', flex: 1, minWidth: '40px' }} />
+                                    style={{color: '#d63031', flex: 1, minWidth: '40px'}}/>
                         </Tooltip>
                     </div>
 
                     {/* Arming | Altitude */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                        <Text size={100} style={{ color: 'var(--colorNeutralForeground3)' }}>ARMING_REQUIRE</Text>
+                    <div style={fieldBoxStyle}>
+                        <Text size={100} style={{color: 'var(--colorNeutralForeground3)'}}>ARMING_REQUIRE</Text>
                         {!session.isConnected ? (
                             <Text size={300} weight="semibold">—</Text>
                         ) : armingValue === null ? (
-                            <Text size={200} style={{ color: 'var(--colorNeutralForeground3)' }}>reading…</Text>
+                            <Text size={200} style={{color: 'var(--colorNeutralForeground3)'}}>{t('sessions.reading')}</Text>
                         ) : (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <div style={{display: 'flex', alignItems: 'center', gap: '6px'}}>
                                 <Text size={200} weight={armingValue < 0.5 ? 'bold' : 'regular'}>0</Text>
-                                <Switch checked={armingValue >= 0.5} disabled={armingBusy} onChange={handleArmingToggle} />
+                                <Switch className={styles.armingSwitch} checked={armingValue >= 0.5}
+                                        disabled={armingBusy} onChange={handleArmingToggle}/>
                                 <Text size={200} weight={armingValue >= 0.5 ? 'bold' : 'regular'}>1</Text>
                             </div>
                         )}
                     </div>
                     <TileField
-                        label="Altitude"
+                        label={t('sessions.altitude')}
                         value={session.isConnected && session.altitude !== null ? `${session.altitude.toFixed(1)} m` : '—'}
                     />
 
                     {/* Version FW | BL */}
                     <TileField
-                        label="Version FW"
+                        label={t('sessions.versionFw')}
                         value={session.data?.firmwareVersion ? `V${session.data.firmwareVersion}` : '—'}
                     />
                     <TileField
-                        label="BL"
+                        label={t('sessions.bl')}
                         value={session.data && session.data.bootloaderRevision > 0 ? `rev ${session.data.bootloaderRevision}` : '—'}
                     />
                 </div>
 
                 {/* Circular progress + completed results */}
                 {(progressVisible || showCompletedResults) && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                    <div style={{display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap'}}>
                         {progressVisible && (
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-                                <CircularProgress percent={session.progress.percent} size={40} stroke={5} />
-                                <Text size={100} style={{ color: 'var(--colorNeutralForeground3)' }}>
+                            <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px'}}>
+                                <CircularProgress percent={session.progress.percent} size={40} stroke={5}/>
+                                <Text size={100} style={{color: 'var(--colorNeutralForeground3)'}}>
                                     {session.progress.message || orchestrator.stage}
                                 </Text>
                             </div>
                         )}
 
                         {showCompletedResults && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <div style={{display: 'flex', flexDirection: 'column', gap: '4px'}}>
                                 {orchestrator.results
                                     .filter(r => r.stage !== 'done')
                                     .map((r, i) => {
                                         if (r.stage === 'flashing')
                                             return <Text key={i} size={200} weight="semibold"
-                                                         style={{ color: r.success ? '#00b894' : '#ff7675' }}>
-                                                {r.success ? 'Firmware — Done ✓' : 'Firmware — Failed ✗'}
+                                                         style={{color: r.success ? '#00b894' : '#ff7675'}}>
+                                                {`${t('sessions.firmware')} — ${r.success ? t('sessions.done') : t('sessions.failed')} ${r.success ? '✓' : '✗'}`}
                                             </Text>;
                                         if (r.stage === 'bootloader') {
                                             if (r.success) {
                                                 const blAfter = session.data?.bootloaderRevision || 0;
                                                 const revInfo = blRevBefore > 0 && blAfter > 0 ? ` (rev ${blRevBefore} → ${blAfter})` : '';
-                                                return <Text key={i} size={200} weight="semibold" style={{ color: '#00b894' }}>
-                                                    Bootloader — Done ✓{revInfo}</Text>;
+                                                return <Text key={i} size={200} weight="semibold"
+                                                             style={{color: '#00b894'}}>
+                                                    {`${t('sessions.bootloader')} — ${t('sessions.done')} ✓`}{revInfo}</Text>;
                                             }
-                                            return <Text key={i} size={200} weight="semibold" style={{ color: '#ff7675' }}>
-                                                Bootloader — Failed ✗</Text>;
+                                            return <Text key={i} size={200} weight="semibold"
+                                                         style={{color: '#ff7675'}}>
+                                                {`${t('sessions.bootloader')} — ${t('sessions.failed')} ✗`}</Text>;
                                         }
                                         if (r.stage === 'params')
                                             return <Text key={i} size={200} weight="semibold"
-                                                         style={{ color: r.success ? '#00b894' : '#ff7675' }}>
-                                                {r.success ? 'Parameters — Done ✓' : 'Parameters — Failed ✗'}
+                                                         style={{color: r.success ? '#00b894' : '#ff7675'}}>
+                                                {`${t('sessions.parameters')} — ${r.success ? t('sessions.done') : t('sessions.failed')} ${r.success ? '✓' : '✗'}`}
                                             </Text>;
                                         return null;
                                     })}
@@ -436,7 +483,7 @@ export const SessionSection = ({
                         backgroundColor: session.error.includes('disconnected') ? '#35120e' : undefined,
                         border: session.error.includes('disconnected') ? '1px solid #ff767544' : undefined,
                     }}>
-                        <Text size={200} style={{ color: '#ff7675' }}>{session.error}</Text>
+                        <Text size={200} style={{color: '#ff7675'}}>{session.error}</Text>
                     </div>
                 )}
             </div>
@@ -450,10 +497,10 @@ interface TileFieldProps {
     value: string;
 }
 
-/** De-boxed label + value cell for the session tile grid. */
-const TileField = ({ label, value }: TileFieldProps) => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-        <Text size={100} style={{ color: 'var(--colorNeutralForeground3)' }}>{label}</Text>
+/** Thin-bordered label + value chip for the session tile grid: label left, value right. */
+const TileField = ({label, value}: TileFieldProps) => (
+    <div style={fieldBoxStyle}>
+        <Text size={100} style={{color: 'var(--colorNeutralForeground3)'}}>{label}</Text>
         <Text size={300} weight="semibold">{value}</Text>
     </div>
 );
