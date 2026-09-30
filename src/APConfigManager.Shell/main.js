@@ -2,7 +2,9 @@ const { app, BrowserWindow, ipcMain, Notification, Menu } = require('electron');
 const { spawn } = require('child_process');
 const http = require('http');
 const path = require('path');
+const fs = require('fs');
 
+app.setName('AP Configuration Manager');
 const VITE_URL = 'http://localhost:5173';
 const API_URL  = 'http://localhost:5000';
 
@@ -129,11 +131,23 @@ ipcMain.on('operations-finished', () => {
   // shows it and plays its notification sound).
   mainWindow.flashFrame(true);
 
-  if (Notification.isSupported()) {
-    new Notification({
+    if (Notification.isSupported()) {
+    const iconPath = path.join(__dirname, 'build', 'icon.png');
+    const notification = new Notification({
       title: 'AP Configuration Manager',
       body: 'Operations finished.',
-    }).show();
+      ...(fs.existsSync(iconPath) ? { icon: iconPath } : {}),
+    });
+    // Clicking the notification brings the window back to the front.
+    notification.on('click', () => {
+      if (!mainWindow) return;
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    });
+    notification.show();
+  } else {
+    console.warn('[shell] Desktop notifications are not supported on this system.');
   }
 });
 
@@ -192,7 +206,7 @@ async function createWindow() {
 // ---------------------------------------------------------------------------
 app.whenReady().then(async () => {
 
-  Menu.setApplicationMenu(null); 
+  Menu.setApplicationMenu(null);
   // If the API port is already served (e.g. a detached instance from a previous
   // run that outlived its window), reuse it instead of spawning a second one.
   if (await ping(API_URL)) {
