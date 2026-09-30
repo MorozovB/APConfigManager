@@ -19,6 +19,27 @@ const brandColors: BrandVariants = {
   160: '#DEF8FF',
 };
 
-export const darkTheme = { ...createDarkTheme(brandColors) };
-export const lightTheme = { ...createLightTheme(brandColors) };
+// Dark theme: a touch darker than Fluent's default neutral surfaces, with a
+// slight cool tint to sit well with the teal brand.
+export const darkTheme = {
+    ...createDarkTheme(brandColors),
+    colorNeutralBackground1: '#1e1e24',
+    colorNeutralBackground1Hover: '#26262e',
+    colorNeutralBackground1Pressed: '#181820',
+    colorNeutralBackground1Selected: '#26262e',
+    colorNeutralBackground2: '#252530',
+    colorNeutralBackground3: '#2c2c38',
+};
+
+// Light theme: a soft light-gray canvas instead of pure white (easier on the
+// eyes), with near-white raised cards.
+export const lightTheme = {
+    ...createLightTheme(brandColors),
+    colorNeutralBackground1: '#e6e6ea',
+    colorNeutralBackground1Hover: '#dcdce2',
+    colorNeutralBackground1Pressed: '#d2d2d9',
+    colorNeutralBackground1Selected: '#dcdce2',
+    colorNeutralBackground2: '#f2f2f5',
+    colorNeutralBackground3: '#dbdbe1',
+};
 

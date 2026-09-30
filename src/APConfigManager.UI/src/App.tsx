@@ -1,16 +1,17 @@
-import { FluentProvider, TabList, Tab, SelectTabEvent, SelectTabData } from '@fluentui/react-components';
+import { FluentProvider } from '@fluentui/react-components';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { darkTheme, lightTheme } from './styles/theme';
 import { ThemeModeContext, type ThemeMode } from './contexts/ThemeModeContext';
 import { useSettings } from './hooks/useSettings';
-import { AppHeader } from './components/layout/AppHeader';
+import { TitleBar } from './components/layout/TitleBar';
 import { SessionList } from './components/sessions/SessionList';
 import { ProfilesPage } from './components/profiles/ProfilesPage';
 import { ToolsPage } from './components/tools/ToolsPage';
 import { SettingsPage } from './components/settings/SettingsPage';
 import { JournalPage } from './components/journal/JournalPage';
 import { useActiveSessions } from './hooks/useActiveSessions';
+import { NavButton } from './components/layout/NavButton';
 
 type TabId = 'config' | 'profiles' | 'tools' | 'settings'| 'journal';
 
@@ -46,42 +47,29 @@ function App() {
         return () => { i18n.off('languageChanged', onChanged); };
     }, [i18n]);
 
-    const handleTabSelect = (_event: SelectTabEvent, data: SelectTabData) => {
-        const tab = data.value as TabId;
+    const selectTab = (tab: TabId) => {
         if (tab !== activeTab && hasActiveSessions) return;
         setActiveTab(tab);
     };
 
-    const isTabLocked = (tab: TabId) => hasActiveSessions && activeTab !== tab && tab !== 'config';
+    const isTabLocked = (tab: TabId) => hasActiveSessions && activeTab !== tab;
 
     return (
         <ThemeModeContext.Provider value={themeCtx}>
             <FluentProvider theme={themeMode === 'dark' ? darkTheme : lightTheme} style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
-                <AppHeader />
+                <TitleBar />
 
-                <div style={{ padding: '0 16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <TabList selectedValue={activeTab} onTabSelect={handleTabSelect} size="large">
-                        <Tab value="config" disabled={isTabLocked('config')}
-                             style={isTabLocked('config') ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}>
-                            {t('tabs.config')}
-                        </Tab>
-                        <Tab value="profiles" disabled={isTabLocked('profiles')}
-                             style={isTabLocked('profiles') ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}>
-                            {t('tabs.profiles')}
-                        </Tab>
-                        <Tab value="tools" disabled={isTabLocked('tools')}
-                             style={isTabLocked('tools') ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}>
-                            {t('tabs.tools')}
-                        </Tab>
-                        <Tab value="settings" disabled={isTabLocked('settings')}
-                             style={isTabLocked('settings') ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}>
-                            {t('tabs.settings')}
-                        </Tab>
-                        <Tab value="journal" disabled={isTabLocked('journal')}
-                             style={isTabLocked('journal') ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}>
-                            {t('tabs.journal')}
-                        </Tab>
-                    </TabList>
+                <div style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <NavButton label={t('tabs.config')} active={activeTab === 'config'}
+                               disabled={isTabLocked('config')} onClick={() => selectTab('config')} />
+                    <NavButton label={t('tabs.profiles')} active={activeTab === 'profiles'}
+                               disabled={isTabLocked('profiles')} onClick={() => selectTab('profiles')} />
+                    <NavButton label={t('tabs.tools')} active={activeTab === 'tools'}
+                               disabled={isTabLocked('tools')} onClick={() => selectTab('tools')} />
+                    <NavButton label={t('tabs.journal')} active={activeTab === 'journal'}
+                               disabled={isTabLocked('journal')} onClick={() => selectTab('journal')} />
+                    <NavButton label={t('tabs.settings')} active={activeTab === 'settings'}
+                               disabled={isTabLocked('settings')} onClick={() => selectTab('settings')} />
                 </div>
 
                 <div style={{ flex: 1, padding: '16px', overflow: 'auto' }}>

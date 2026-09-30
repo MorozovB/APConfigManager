@@ -1,19 +1,21 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { Button, Text, Tooltip } from '@fluentui/react-components';
-import { AddRegular, PlayFilled, PlugDisconnectedRegular } from '@fluentui/react-icons';
-import { SessionSection } from './SessionSection';
-import { ProfileSelector } from '../common/ProfileSelector';
-import { useSettings } from '../../hooks/useSettings';
-import { useProfiles } from '../../hooks/useProfiles';
-import { useProfileFiles } from '../../hooks/useProfileFiles';
-import { notifyOperationsFinished } from '../../platform/host';
+import {useState, useRef, useEffect, useCallback} from 'react';
+import {Button, Text, Tooltip} from '@fluentui/react-components';
+import {AddRegular, PlayFilled, PlugDisconnectedRegular} from '@fluentui/react-icons';
+import {useTranslation} from "react-i18next";
+import {SessionSection} from './SessionSection';
+import {ProfileSelector} from '../common/ProfileSelector';
+import {useSettings} from '../../hooks/useSettings';
+import {useProfiles} from '../../hooks/useProfiles';
+import {useProfileFiles} from '../../hooks/useProfileFiles';
+import {notifyOperationsFinished} from '../../platform/host';
 
 const MAX_SESSIONS = 7;
 
 export const SessionList = () => {
-    const { settings } = useSettings();
-    const { profiles } = useProfiles();
-    const { loadFromServer } = useProfileFiles();
+    const {t} = useTranslation();
+    const {settings} = useSettings();
+    const {profiles} = useProfiles();
+    const {loadFromServer} = useProfileFiles();
 
     const [slots, setSlots] = useState<number[]>([]);
     const nextId = useRef(0);
@@ -25,6 +27,7 @@ export const SessionList = () => {
 
     const connectedRef = useRef<Map<number, boolean>>(new Map());
     const [connectedCount, setConnectedCount] = useState(0);
+    const [connectedPorts, setConnectedPorts] = useState<Record<number, string>>({});
 
     // Group "run active": one profile applied to every connected session at once.
     const [groupProfileId, setGroupProfileId] = useState<string | null>(null);
@@ -37,7 +40,7 @@ export const SessionList = () => {
         if (!initialized.current && settings) {
             initialized.current = true;
             const startup = Math.min(Math.max(settings.startupSessions ?? 1, 1), MAX_SESSIONS);
-            setSlots(Array.from({ length: startup }, () => nextId.current++));
+            setSlots(Array.from({length: startup}, () => nextId.current++));
         }
     }, [settings]);
 
@@ -52,9 +55,15 @@ export const SessionList = () => {
         prevAnyRunning.current = anyRunningNow;
     }, []);
 
-    const handleConnectedChange = useCallback((id: number, connected: boolean) => {
+    const handleConnectedChange = useCallback((id: number, connected: boolean, port: string) => {
         connectedRef.current.set(id, connected);
         setConnectedCount(Array.from(connectedRef.current.values()).filter(Boolean).length);
+        setConnectedPorts(prev => {
+            const next = { ...prev };
+            if (connected && port) next[id] = port;
+            else delete next[id];
+            return next;
+        });
     }, []);
 
     const handleRunActive = useCallback(async () => {
@@ -88,10 +97,15 @@ export const SessionList = () => {
         runningRef.current.delete(id);
         connectedRef.current.delete(id);
         setConnectedCount(Array.from(connectedRef.current.values()).filter(Boolean).length);
+        setConnectedPorts(prev => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+        });
     };
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
 
             {connectedCount > 0 && (
                 <div style={{
@@ -100,59 +114,86 @@ export const SessionList = () => {
                     backgroundColor: 'var(--colorNeutralBackground2)',
                     border: '1px solid var(--colorBrandStroke1)',
                 }}>
-                    <Text size={200} weight="semibold">Run on connected</Text>
+                    <Text size={200} weight="semibold">{t('sessions.runOnConnected')}</Text>
                     <ProfileSelector
                         profiles={profiles}
                         selectedProfileId={groupProfileId}
                         onSelect={setGroupProfileId}
                         disabled={anyRunning || groupBusy}
                     />
-                    <Tooltip content="Run this profile on all connected sessions" relationship="label">
+                    <Tooltip content={t('sessions.runActiveTooltip')} relationship="label">
                         <Button
                             appearance="primary"
-                            icon={<PlayFilled />}
+                            icon={<PlayFilled/>}
                             onClick={handleRunActive}
                             disabled={!groupProfileId || connectedCount === 0 || anyRunning || groupBusy}
-                            style={{ backgroundColor: '#0984e3', borderColor: '#0984e3' }}
+                            style={{backgroundColor: '#0984e3', borderColor: '#0984e3'}}
                         >
-                            Run active ({connectedCount})
+                            {t('sessions.runActive')} ({connectedCount})
                         </Button>
                     </Tooltip>
-                    <Tooltip content="Disconnect all connected sessions" relationship="label">
+                    <Tooltip content={t('sessions.disconnectAllTooltip')} relationship="label">
                         <Button
                             appearance="subtle"
-                            icon={<PlugDisconnectedRegular />}
+                            icon={<PlugDisconnectedRegular/>}
                             onClick={handleDisconnectAll}
                             disabled={anyRunning || groupBusy}
-                            style={{ color: '#d63031' }}
+                            style={{color: '#d63031'}}
                         >
-                            Disconnect all
+                            {t('sessions.disconnectAll')}
                         </Button>
                     </Tooltip>
                 </div>
             )}
 
-            {slots.map((id, position) => (
-                <SessionSection
-                    key={id}
-                    slotId={id}
-                    index={position}
-                    total={slots.length || 1}
-                    onClose={() => closeSlot(id)}
-                    onRunningChange={handleRunningChange}
-                    onConnectedChange={handleConnectedChange}
-                    groupProfileId={groupProfileId}
-                    groupRunToken={groupRunToken}
-                    groupDisconnectToken={groupDisconnectToken}
-                />
-            ))}
+            <div style={{display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'stretch'}}>
+                {slots.map((id, position) => {
+                    const portsUsedByOthers = Object.entries(connectedPorts)
+                        .filter(([sid]) => Number(sid) !== id)
+                        .map(([, port]) => port);
+                    return (
+                        <SessionSection
+                            key={id}
+                            slotId={id}
+                            index={position}
+                            onClose={() => closeSlot(id)}
+                            onRunningChange={handleRunningChange}
+                            onConnectedChange={handleConnectedChange}
+                            portsUsedByOthers={portsUsedByOthers}
+                            groupProfileId={groupProfileId}
+                            groupRunToken={groupRunToken}
+                            groupDisconnectToken={groupDisconnectToken}
+                        />
+                    );
+                })}
 
-            {slots.length < MAX_SESSIONS && (
-                <Button appearance="subtle" icon={<AddRegular />} onClick={addSlot}
-                        style={{ alignSelf: 'flex-start' }}>
-                    Add session
-                </Button>
-            )}
+                {slots.length < MAX_SESSIONS && (
+                    <button
+                        type="button"
+                        onClick={addSlot}
+                        title={t('sessions.addSession')}
+                        style={{
+                            width: '460px',
+                            minHeight: '280px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '10px',
+                            cursor: 'pointer',
+                            borderRadius: '10px',
+                            border: '2px dashed var(--colorNeutralStroke2)',
+                            background: 'var(--colorNeutralBackground2)',
+                            color: 'var(--colorNeutralForeground3)',
+                        }}
+                    >
+                        <AddRegular style={{fontSize: '48px'}}/>
+                        <Text size={400} weight="semibold" style={{color: 'var(--colorNeutralForeground2)'}}>
+                            {t('sessions.addSection')}
+                        </Text>
+                    </button>
+                )}
+            </div>
         </div>
     );
 };

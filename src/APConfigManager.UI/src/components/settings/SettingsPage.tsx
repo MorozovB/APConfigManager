@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import {useState} from 'react';
 import {
     Text,
     Dropdown,
@@ -8,24 +8,24 @@ import {
     Card,
     Field,
 } from '@fluentui/react-components';
-import { SaveRegular } from '@fluentui/react-icons';
-import { useTranslation } from 'react-i18next';
-import { useSettings } from '../../hooks/useSettings.ts';
-import { useThemeMode } from '../../contexts/ThemeModeContext';
+import {SaveRegular} from '@fluentui/react-icons';
+import {useTranslation} from 'react-i18next';
+import {useSettings} from '../../hooks/useSettings.ts';
+import {useThemeMode} from '../../contexts/ThemeModeContext';
 
 const languages = [
-    { code: 'EN', label: 'English' },
-    { code: 'CZ', label: 'Čeština' },
-    { code: 'UA', label: 'Українська' },
+    {code: 'EN', label: 'English'},
+    {code: 'CZ', label: 'Čeština'},
+    {code: 'UA', label: 'Українська'},
 ];
 
 // Standard serial speeds; capped so a user can't pick an unusably high value.
 const baudRates = [57600, 115200, 230400, 460800, 921600];
 
 export const SettingsPage = () => {
-    const { t, i18n } = useTranslation();
-    const { settings, loading, error, save } = useSettings();
-    const { mode, setMode } = useThemeMode();
+    const {t, i18n} = useTranslation();
+    const {settings, loading, error, save} = useSettings();
+    const {mode, setMode} = useThemeMode();
 
     const [languageOverride, setLanguageOverride] = useState<string | null>(null);
     const language = languageOverride ?? settings?.language ?? 'UA';
@@ -44,26 +44,26 @@ export const SettingsPage = () => {
     };
 
     const handleSave = async () => {
-        await save({ language, theme: mode, startupSessions, portBaudRate });
+        await save({language, theme: mode, startupSessions, portBaudRate});
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
     };
 
     if (loading) {
         return (
-            <Text size={200} style={{ color: 'var(--colorNeutralForeground3)' }}>
+            <Text size={200} style={{color: 'var(--colorNeutralForeground3)'}}>
                 {t('settings.loading')}
             </Text>
         );
     }
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '500px' }}>
+        <div style={{display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '500px'}}>
 
             <Text size={500} weight="semibold">{t('settings.title')}</Text>
 
             {error && (
-                <Text size={200} style={{ color: '#ff7675' }}>{error}</Text>
+                <Text size={200} style={{color: '#ff7675'}}>{error}</Text>
             )}
 
             <Card style={{
@@ -127,13 +127,13 @@ export const SettingsPage = () => {
                     </Dropdown>
                 </Field>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <Button appearance="primary" icon={<SaveRegular />} onClick={handleSave}>
+                <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
+                    <Button appearance="primary" icon={<SaveRegular/>} onClick={handleSave}>
                         {t('settings.save')}
                     </Button>
 
                     {saved && (
-                        <Text size={200} style={{ color: '#00b894' }}>
+                        <Text size={200} style={{color: '#00b894'}}>
                             {t('settings.saved')}
                         </Text>
                     )}

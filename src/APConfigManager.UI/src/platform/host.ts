@@ -11,6 +11,13 @@ declare global {
     interface Window {
         electronAPI?: {
             notifyOperationsFinished: () => void;
+            window?: {
+                minimize: () => void;
+                toggleMaximize: () => void;
+                close: () => void;
+                isMaximized: () => Promise<boolean>;
+                onMaximizeChange: (cb: (isMax: boolean) => void) => () => void;
+            };
         };
     }
 }
