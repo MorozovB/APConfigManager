@@ -27,6 +27,7 @@ export const SessionList = () => {
 
     const connectedRef = useRef<Map<number, boolean>>(new Map());
     const [connectedCount, setConnectedCount] = useState(0);
+    const [connectedPorts, setConnectedPorts] = useState<Record<number, string>>({});
 
     // Group "run active": one profile applied to every connected session at once.
     const [groupProfileId, setGroupProfileId] = useState<string | null>(null);
@@ -54,9 +55,15 @@ export const SessionList = () => {
         prevAnyRunning.current = anyRunningNow;
     }, []);
 
-    const handleConnectedChange = useCallback((id: number, connected: boolean) => {
+    const handleConnectedChange = useCallback((id: number, connected: boolean, port: string) => {
         connectedRef.current.set(id, connected);
         setConnectedCount(Array.from(connectedRef.current.values()).filter(Boolean).length);
+        setConnectedPorts(prev => {
+            const next = { ...prev };
+            if (connected && port) next[id] = port;
+            else delete next[id];
+            return next;
+        });
     }, []);
 
     const handleRunActive = useCallback(async () => {
@@ -90,6 +97,11 @@ export const SessionList = () => {
         runningRef.current.delete(id);
         connectedRef.current.delete(id);
         setConnectedCount(Array.from(connectedRef.current.values()).filter(Boolean).length);
+        setConnectedPorts(prev => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+        });
     };
 
     return (
@@ -135,19 +147,25 @@ export const SessionList = () => {
             )}
 
             <div style={{display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'stretch'}}>
-                {slots.map((id, position) => (
-                    <SessionSection
-                        key={id}
-                        slotId={id}
-                        index={position}
-                        onClose={() => closeSlot(id)}
-                        onRunningChange={handleRunningChange}
-                        onConnectedChange={handleConnectedChange}
-                        groupProfileId={groupProfileId}
-                        groupRunToken={groupRunToken}
-                        groupDisconnectToken={groupDisconnectToken}
-                    />
-                ))}
+                {slots.map((id, position) => {
+                    const portsUsedByOthers = Object.entries(connectedPorts)
+                        .filter(([sid]) => Number(sid) !== id)
+                        .map(([, port]) => port);
+                    return (
+                        <SessionSection
+                            key={id}
+                            slotId={id}
+                            index={position}
+                            onClose={() => closeSlot(id)}
+                            onRunningChange={handleRunningChange}
+                            onConnectedChange={handleConnectedChange}
+                            portsUsedByOthers={portsUsedByOthers}
+                            groupProfileId={groupProfileId}
+                            groupRunToken={groupRunToken}
+                            groupDisconnectToken={groupDisconnectToken}
+                        />
+                    );
+                })}
 
                 {slots.length < MAX_SESSIONS && (
                     <button

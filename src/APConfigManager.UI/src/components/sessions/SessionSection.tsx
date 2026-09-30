@@ -62,7 +62,8 @@ interface Props {
     slotId: number;
     onClose: () => void;
     onRunningChange: (id: number, running: boolean) => void;
-    onConnectedChange: (id: number, connected: boolean) => void;
+    onConnectedChange: (id: number, connected: boolean, port: string) => void;
+    portsUsedByOthers: string[];
     groupProfileId: string | null;
     groupRunToken: number;
     groupDisconnectToken: number;
@@ -74,6 +75,7 @@ export const SessionSection = ({
                                    onClose,
                                    onRunningChange,
                                    onConnectedChange,
+                                   portsUsedByOthers,
                                    groupProfileId,
                                    groupRunToken,
                                    groupDisconnectToken,
@@ -93,6 +95,7 @@ export const SessionSection = ({
     const [armingBusy, setArmingBusy] = useState(false);
     const styles = useStyles();
     const {t} = useTranslation();
+    const availablePorts = ports.filter(p => !portsUsedByOthers.includes(p.name));
     // const accelData = useMockAccelerometer();
 
     const addLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
@@ -179,8 +182,14 @@ export const SessionSection = ({
     }, [slotId, orchestrator.isRunning, onRunningChange]);
 
     useEffect(() => {
-        onConnectedChange(slotId, session.isConnected);
-    }, [slotId, session.isConnected, onConnectedChange]);
+        onConnectedChange(slotId, session.isConnected, session.data?.port ?? '');
+    }, [slotId, session.isConnected, session.data?.port, onConnectedChange]);
+
+    useEffect(() => {
+        if (!session.isConnected && selectedPort && portsUsedByOthers.includes(selectedPort)) {
+            setSelectedPort('');
+        }
+    }, [portsUsedByOthers, selectedPort, session.isConnected]);
 
     const handleConnect = useCallback(async () => {
         if (!selectedPort) {
@@ -359,7 +368,7 @@ export const SessionSection = ({
 
                     {/* Port | Connect / Disconnect */}
                     <PortSelector
-                        ports={ports}
+                        ports={availablePorts}
                         selectedPort={selectedPort}
                         onSelect={setSelectedPort}
                         disabled={session.isConnected || isBusy}
