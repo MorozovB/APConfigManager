@@ -45,7 +45,7 @@ namespace APConfigManager.Infrastructure.Transport
                 result.Add(new PortDescription
                 {
                     Name = link.DevPath,
-                    Description = link.ByIdName,
+                    Description = BuildFriendlyName(link.ByIdName),
                     VendorId = vid,
                     ProductId = pid,
                     DeviceSerial = link.Serial,
@@ -225,6 +225,54 @@ namespace APConfigManager.Infrastructure.Transport
         {
             // Hide SLCAN (if02) from the main list, mirroring the Windows behaviour.
             return port.LocationPath?.EndsWith($"-{SlcanInterface}", StringComparison.Ordinal) != true;
+        }
+
+        /// <summary>
+        /// Turns a raw by-id link name into a short, human-readable label, e.g.
+        /// "usb-CubePilot_CubeOrange+_3000...-if00" -> "CubePilot CO+".
+        /// Unknown shapes fall back to the raw by-id name so nothing is ever hidden.
+        /// </summary>
+        private static string BuildFriendlyName(string byIdName)
+        {
+            // usb-<vendor>_<product>_<serial>[-ifNN]
+            var m = Regex.Match(byIdName, @"^usb-([^_]+)_(.+?)_[0-9A-Fa-f]{6,}(?:-if\d+)?$");
+            if (!m.Success)
+            {
+                return byIdName;
+            }
+
+            var vendor  = m.Groups[1].Value.Replace('_', ' ').Trim(); // CubePilot
+            var product = m.Groups[2].Value.Replace('_', ' ').Trim(); // CubeOrange+
+            var model   = MapModel(product);
+
+            return string.IsNullOrEmpty(vendor) ? model : $"{vendor} {model}";
+        }
+
+        /// <summary>
+        /// Maps a USB product string to a short model code for the Cube family.
+        /// Other products are returned as-is (already cleaned up).
+        /// </summary>
+        private static string MapModel(string product)
+        {
+            // Bootloader / DFU as a delimited token, so it never matches inside a name.
+            if (Regex.IsMatch(product, @"(^|[ _\-])(BL|Bootloader|DFU)([ _\-]|$)", RegexOptions.IgnoreCase))
+            {
+                return "BL";
+            }
+
+            // Check the "+" variant before the plain one (the plain string is a prefix of it).
+            if (product.Contains("CubeOrange+", StringComparison.OrdinalIgnoreCase) ||
+                product.Contains("CubeOrangePlus", StringComparison.OrdinalIgnoreCase))
+            {
+                return "CO+";
+            }
+
+            if (product.Contains("CubeOrange", StringComparison.OrdinalIgnoreCase))
+            {
+                return "CO+";
+            }
+
+            return product;
         }
     }
 }
