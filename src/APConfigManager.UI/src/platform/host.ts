@@ -11,7 +11,12 @@ declare global {
     interface Window {
         electronAPI?: {
             notifyOperationsFinished: () => void;
-            window?: {
+            apiOperation?: (payload: {
+                path: string;
+                fileName?: string;
+                fileBuffer?: ArrayBuffer;
+            }) => Promise<{ status: number; body: string }>;
+            window: {
                 minimize: () => void;
                 toggleMaximize: () => void;
                 close: () => void;

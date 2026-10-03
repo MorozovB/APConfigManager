@@ -1,13 +1,13 @@
 {
   "name": "apconfigmanager-shell",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "description": "AP Configuration Manager desktop shell (Electron)",
   "main": "main.js",
   "license": "UNLICENSED",
   "author": "II test@build.com",
   "homepage": "https://github.com/test/",
   "scripts": {
-        "start": "electron .",
+    "start": "electron .",
     "sync-version": "node version.mjs sync",
     "publish:api:linux": "dotnet publish ../APConfigManager.Api/APConfigManager.Api.csproj -c Release -r linux-x64 --self-contained true -o api",
     "publish:api:win": "dotnet publish ../APConfigManager.Api/APConfigManager.Api.csproj -c Release -r win-x64 --self-contained true -o api",
@@ -33,7 +33,9 @@
       }
     ],
     "linux": {
-      "target": ["rpm"],
+      "target": [
+        "rpm"
+      ],
       "category": "Utility",
       "icon": "build/icon.png",
       "maintainer": "<test@build.com>"
@@ -43,7 +45,9 @@
       "afterRemove": "build/after-remove.sh"
     },
     "win": {
-      "target": ["nsis"],
+      "target": [
+        "nsis"
+      ],
       "icon": "build/icon.png"
     },
     "nsis": {

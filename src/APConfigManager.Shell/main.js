@@ -156,6 +156,58 @@ app.on('browser-window-focus', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Device-operation proxy
+// ---------------------------------------------------------------------------
+// Long device operations (flash / params / bootloader) go through the main
+// process instead of the renderer: Chromium caps concurrent HTTP connections at
+// 6 per host, which stalls the 7th session during a group run. Node's socket
+// pool (http.globalAgent, maxSockets = Infinity) has no such cap, so all run
+// concurrently. Progress/completion still arrive over SignalR in the renderer.
+ipcMain.handle('api:operation', async (_event, payload) => {
+  const { path: apiPath, fileName, fileBuffer } = payload || {};
+  const target = new URL(API_URL + apiPath);
+
+  const headers = {};
+  let body = null;
+  if (fileBuffer) {
+    const boundary = '----apcm-' + Date.now().toString(16) + '-' + Math.random().toString(16).slice(2);
+    const head = Buffer.from(
+      `--${boundary}\r\n` +
+      `Content-Disposition: form-data; name="file"; filename="${(fileName || 'file').replace(/"/g, '')}"\r\n` +
+      `Content-Type: application/octet-stream\r\n\r\n`,
+      'utf8',
+    );
+    const tail = Buffer.from(`\r\n--${boundary}--\r\n`, 'utf8');
+    body = Buffer.concat([head, Buffer.from(fileBuffer), tail]);
+    headers['Content-Type'] = `multipart/form-data; boundary=${boundary}`;
+    headers['Content-Length'] = body.length;
+  }
+
+  return await new Promise((resolve, reject) => {
+    const req = http.request(
+      {
+        hostname: target.hostname,
+        port: target.port,
+        path: target.pathname + target.search,
+        method: 'POST',
+        headers,
+        timeout: 600000,
+      },
+      (res) => {
+        let data = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => resolve({ status: res.statusCode, body: data }));
+      },
+    );
+    req.on('timeout', () => req.destroy(new Error('Operation timed out')));
+    req.on('error', reject);
+    if (body) req.write(body);
+    req.end();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Custom window controls (frameless window)
 // ---------------------------------------------------------------------------
 ipcMain.on('window:minimize', () => mainWindow?.minimize());

@@ -30,10 +30,10 @@ public class SessionsControllerTests
 
         // SignalR mock chain: hubContext.Clients.Group(id) → clientProxy
         var mockClients = new Mock<IHubClients>();
-        mockClients
+        _ = mockClients
             .Setup(c => c.Group(It.IsAny<string>()))
             .Returns(mockClientProxy.Object);
-        mockHubContext
+        _ = mockHubContext
             .Setup(h => h.Clients)
             .Returns(mockClients.Object);
 
